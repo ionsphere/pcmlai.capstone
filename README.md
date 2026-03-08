@@ -77,3 +77,5 @@ During scraping, specific categories were selected to make sure queries to all s
 **Model**
 
 As a base model Logistic Regression shows 78.8% accuracy.
+We've used the OneHot encoder to prepare all the categorical columns: brand, category, color, size - all of them.
+We've manually encoded price_bracket categories into integer price_bucket to maintain monotonous dependency between the trained output and actual semantical "more expensive" designation.
