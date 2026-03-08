@@ -1,2 +1,2 @@
-# pcmlai.capstone
-Capstone project: Image-Based Valuation of Used Clothing for Intrinsic-Value Matching in Second-Hand  Exchange Platforms
+# Capstone project: Image-Based Valuation of Used Clothing for Intrinsic-Value Matching in Second-Hand  Exchange Platforms
+
