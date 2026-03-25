@@ -1,11 +1,10 @@
-import os
 import sys
 import json
 import argparse
 import time
+import copy
 from pathlib import Path
-from datetime import datetime
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 
 project_root = Path(__file__).parent.parent
@@ -21,8 +20,54 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 
-from src.models.vision import MultiTaskClothingModel, MultiTaskLoss, ModelFactory, count_parameters
+from src.models.vision import ModelFactory, count_parameters
 from scripts.prepare_clothing_type_dataset import ClothingTypeDataset
+
+
+DEFAULT_IMAGE_SIZE = 380
+DEFAULT_TRAINING_CONFIG = {
+    "model": {
+        "backbone": "efficientnet_b4",
+        "num_clothing_types": 20,
+        "condition_scale": 10,
+        "condition_mode": "regression",
+        "pretrained": True,
+        "freeze_backbone": False,
+    },
+    "training": {
+        "batch_size": 32,
+        "num_epochs": 50,
+        "learning_rate": 1e-4,
+        "weight_decay": 1e-5,
+        "optimizer": "AdamW",
+        "scheduler": "CosineAnnealingLR",
+        "scheduler_params": {
+            "T_max": 50,
+            "eta_min": 1e-6,
+        },
+        "mixed_precision": True,
+        "gradient_clip": 1.0,
+        "early_stopping_patience": 10,
+        "checkpoint_every_n_epochs": 5,
+        "type_weight": None,
+        "condition_weight": None,
+        "num_workers": 0,
+    },
+}
+
+
+def build_config(batch_size: Optional[int] = None, epochs: Optional[int] = None, quick_test: bool = False) -> Dict:
+    config = copy.deepcopy(DEFAULT_TRAINING_CONFIG)
+    if batch_size is not None:
+        config["training"]["batch_size"] = batch_size
+    if epochs is not None:
+        config["training"]["num_epochs"] = epochs
+        config["training"]["scheduler_params"]["T_max"] = epochs
+    if quick_test:
+        config["training"]["batch_size"] = 4
+        config["training"]["num_epochs"] = 2
+        config["training"]["scheduler_params"]["T_max"] = 2
+    return config
 
 
 class AverageMeter:
@@ -70,7 +115,7 @@ class Trainer:
         self.criterion = ModelFactory.create_loss(config)
         self.criterion = self.criterion.to(self.device)
         
-        train_config = config.get('training', {})
+        train_config = config['training']
         self.optimizer = self.create_optimizer(train_config)
         self.scheduler = self.create_scheduler(train_config)
         self.use_amp = train_config.get('mixed_precision', True)
@@ -162,7 +207,6 @@ class Trainer:
             data_time.update(time.time() - end)
             images = images.to(self.device)
             labels = labels.to(self.device)
-            dummy_condition = torch.zeros(len(images), device=self.device)
             batch_size = images.size(0)
             if self.use_amp:
                 with torch.cuda.amp.autocast():
@@ -176,7 +220,7 @@ class Trainer:
             
             if self.use_amp:
                 self.scaler.scale(loss).backward()
-                if self.config.get('training', {}).get('gradient_clip'):
+                if self.config['training'].get('gradient_clip'):
                     self.scaler.unscale_(self.optimizer)
                     torch.nn.utils.clip_grad_norm_(
                         self.model.parameters(),
@@ -186,7 +230,7 @@ class Trainer:
                 self.scaler.update()
             else:
                 loss.backward()
-                if self.config.get('training', {}).get('gradient_clip'):
+                if self.config['training'].get('gradient_clip'):
                     torch.nn.utils.clip_grad_norm_(
                         self.model.parameters(),
                         self.config['training']['gradient_clip']
@@ -274,7 +318,7 @@ class Trainer:
             torch.save(checkpoint, best_path)
             print(f"Saved best model (acc={self.best_val_acc:.4f})")
         
-        if epoch % self.config.get('training', {}).get('checkpoint_every_n_epochs', 5) == 0:
+        if epoch % self.config['training'].get('checkpoint_every_n_epochs', 5) == 0:
             epoch_path = self.checkpoint_dir / f'epoch_{epoch:03d}.pth'
             torch.save(checkpoint, epoch_path)
     
@@ -398,51 +442,32 @@ def resolve_image_root(data_dir: Path, mapping: Dict) -> Path:
     )
 
 
-def create_transforms(config: Dict, is_train: bool = True):
-    input_size = config['model']['input_size'][1]
-    
+def create_transforms(image_size: int = DEFAULT_IMAGE_SIZE, is_train: bool = True):
     if is_train:
-        aug_config = config.get('augmentation', {}).get('train', {})
         transform_list = [
-            transforms.Resize((int(input_size * 1.1), int(input_size * 1.1))),
-        ]
-        
-        if aug_config.get('random_crop', True):
-            transform_list.append(transforms.RandomCrop(input_size))
-        else:
-            transform_list.append(transforms.CenterCrop(input_size))
-        
-        if aug_config.get('horizontal_flip', True):
-            transform_list.append(transforms.RandomHorizontalFlip())
-        
-        if aug_config.get('rotation_degrees'):
-            transform_list.append(
-                transforms.RandomRotation(aug_config['rotation_degrees'])
-            )
-        
-        if aug_config.get('color_jitter'):
-            cj = aug_config['color_jitter']
-            transform_list.append(transforms.ColorJitter(
-                brightness=cj.get('brightness', 0),
-                contrast=cj.get('contrast', 0),
-                saturation=cj.get('saturation', 0),
-                hue=cj.get('hue', 0)
-            ))
-        
-        transform_list.append(transforms.ToTensor())
-        norm_config = config.get('augmentation', {}).get('normalize', {})
-        transform_list.append(transforms.Normalize(
-            mean=norm_config.get('mean', [0.485, 0.456, 0.406]),
-            std=norm_config.get('std', [0.229, 0.224, 0.225])
-        ))
-    else:
-        norm_config = config.get('augmentation', {}).get('normalize', {})
-        transform_list = [
-            transforms.Resize((input_size, input_size)),
+            transforms.Resize((int(image_size * 1.1), int(image_size * 1.1))),
+            transforms.RandomCrop(image_size),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(15),
+            transforms.ColorJitter(
+                brightness=0.2,
+                contrast=0.2,
+                saturation=0.2,
+                hue=0.1,
+            ),
             transforms.ToTensor(),
             transforms.Normalize(
-                mean=norm_config.get('mean', [0.485, 0.456, 0.406]),
-                std=norm_config.get('std', [0.229, 0.224, 0.225])
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225],
+            ),
+        ]
+    else:
+        transform_list = [
+            transforms.Resize((image_size, image_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225],
             )
         ]
     
@@ -451,8 +476,6 @@ def create_transforms(config: Dict, is_train: bool = True):
 
 def main():
     parser = argparse.ArgumentParser(description="Train clothing type classification model")
-    parser.add_argument('--config', type=str, default='configs/vision_model_config.json',
-                       help='Path to config file')
     parser.add_argument('--data-dir', type=str, default='data/processed/clothing_type',
                        help='Path to prepared dataset')
     parser.add_argument('--output-dir', type=str, default='models/clothing_type',
@@ -469,31 +492,17 @@ def main():
                        help='Device to use (cuda or cpu)')
     
     args = parser.parse_args()
-    config_path = Path(args.config)
-    if not config_path.exists():
-        print(f"Config file not found: {config_path}")
-        return
-    
-    with open(config_path, 'r') as f:
-        config = json.load(f)
-    
+    config = build_config(
+        batch_size=args.batch_size,
+        epochs=args.epochs,
+        quick_test=args.quick_test,
+    )
     if args.quick_test:
         print("Quick test mode enabled")
-        config['training']['batch_size'] = 4
-        config['training']['num_epochs'] = 2
-        args.data_dir = 'data/processed/clothing_type'
-    
-    if args.batch_size:
-        config['training']['batch_size'] = args.batch_size
-    if args.epochs:
-        config['training']['num_epochs'] = args.epochs
     
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    with open(output_dir / 'config.json', 'w') as f:
-        json.dump(config, f, indent=2)
-    
+
     data_dir = Path(args.data_dir)
     mapping_file = data_dir / 'category_mapping.json'
     
@@ -506,12 +515,16 @@ def main():
         mapping = json.load(f)
     
     category_to_idx = mapping['category_to_idx']
+    config['model']['num_clothing_types'] = len(category_to_idx)
     print(f"Loaded {len(category_to_idx)} categories")
     image_root = resolve_image_root(data_dir, mapping)
     print(f"Image root: {image_root}")
+
+    with open(output_dir / 'config.json', 'w') as f:
+        json.dump(config, f, indent=2)
     
-    train_transform = create_transforms(config, is_train=True)
-    val_transform = create_transforms(config, is_train=False)
+    train_transform = create_transforms(is_train=True)
+    val_transform = create_transforms(is_train=False)
     
     print("Loading datasets...")
     
@@ -540,7 +553,7 @@ def main():
     print(f"Val dataset: {len(val_dataset)} samples")
     
     batch_size = config['training']['batch_size']
-    num_workers = 4 if not args.quick_test else 0
+    num_workers = config['training']['num_workers']
     
     train_loader = DataLoader(
         train_dataset,

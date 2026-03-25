@@ -3,11 +3,10 @@
 import argparse
 import json
 import logging
-import os
 import shutil
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
-from collections import defaultdict, Counter
+from collections import defaultdict
 import random
 import hashlib
 
@@ -19,14 +18,23 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_BASE_DIR = "data"
+DEFAULT_TRAIN_RATIO = 0.7
+DEFAULT_VAL_RATIO = 0.15
+DEFAULT_TEST_RATIO = 0.15
+DEFAULT_SEED = 42
+DEFAULT_STRATIFY = "condition"
+DEFAULT_REPORT_PATH = "data/processed/split_report.json"
+
+
 class DataSplitter:
     def __init__(
         self,
-        base_dir: str = "data",
-        train_ratio: float = 0.7,
-        val_ratio: float = 0.15,
-        test_ratio: float = 0.15,
-        seed: int = 42
+        base_dir: str = DEFAULT_BASE_DIR,
+        train_ratio: float = DEFAULT_TRAIN_RATIO,
+        val_ratio: float = DEFAULT_VAL_RATIO,
+        test_ratio: float = DEFAULT_TEST_RATIO,
+        seed: int = DEFAULT_SEED
     ):
         self.base_dir = Path(base_dir)
         self.train_ratio = train_ratio
@@ -91,24 +99,24 @@ class DataSplitter:
         if original_dir.exists():
             for img_path in original_dir.rglob("*"):
                 if img_path.is_file() and img_path.suffix.lower() in ['.jpg', '.jpeg', '.png']:
-                    images.append({
-                        "path": img_path,
-                        "type": "original",
-                        "condition": 10,
-                        "category": self._extract_category_from_path(img_path)
-                    })
+                        images.append({
+                            "path": img_path,
+                            "type": "original",
+                            "condition": 10,
+                            "category": self.extract_category_from_path(img_path)
+                        })
         
         if include_synthetic:
             synthetic_dir = self.deepfashion_dir / "synthetic_degraded"
             if synthetic_dir.exists():
                 for img_path in synthetic_dir.rglob("*"):
                     if img_path.is_file() and img_path.suffix.lower() in ['.jpg', '.jpeg', '.png']:
-                        condition = self._extract_condition_from_filename(img_path.stem)
+                        condition = self.extract_condition_from_filename(img_path.stem)
                         images.append({
                             "path": img_path,
                             "type": "synthetic",
                             "condition": condition,
-                            "category": self._extract_category_from_path(img_path)
+                            "category": self.extract_category_from_path(img_path)
                         })
         
         logger.info(f"Found {len(images)} images to split")
@@ -118,13 +126,13 @@ class DataSplitter:
             return
         
         if stratify_by != "none":
-            train, val, test = self._stratified_split(images, stratify_by)
+            train, val, test = self.stratified_split(images, stratify_by)
         else:
-            train, val, test = self._random_split(images)
+            train, val, test = self.random_split(images)
         
-        self._copy_files(train, self.train_dir, "train")
-        self._copy_files(val, self.val_dir, "val")
-        self._copy_files(test, self.test_dir, "test")
+        self.copy_files(train, self.train_dir, "train")
+        self.copy_files(val, self.val_dir, "val")
+        self.copy_files(test, self.test_dir, "test")
         logger.info(f"DeepFashion split complete: {len(train)} train, {len(val)} val, {len(test)} test")
         
     def split_scraped_data(
@@ -147,16 +155,16 @@ class DataSplitter:
             return
         
         for item in items:
-            item["price_range"] = self._get_price_range(item.get("price"))
+            item["price_range"] = self.get_price_range(item.get("price"))
         
         if stratify_by != "none":
-            train, val, test = self._stratified_split(items, stratify_by)
+            train, val, test = self.stratified_split(items, stratify_by)
         else:
-            train, val, test = self._random_split(items)
+            train, val, test = self.random_split(items)
         
-        self._save_scraped_split(train, self.train_dir, "train")
-        self._save_scraped_split(val, self.val_dir, "val")
-        self._save_scraped_split(test, self.test_dir, "test")
+        self.save_scraped_split(train, self.train_dir, "train")
+        self.save_scraped_split(val, self.val_dir, "val")
+        self.save_scraped_split(test, self.test_dir, "test")
         
         logger.info(f"Scraped data split complete: {len(train)} train, {len(val)} val, {len(test)} test")
         
@@ -366,22 +374,7 @@ class DataSplitter:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Prepare train/validation/test splits from organized data",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Example:
-  python prepare_splits.py --all --train 0.8 --val 0.1 --test 0.1
-        """
-    )
-    
-    parser.add_argument(
-        "--base-dir",
-        type=str,
-        default="data",
-        help="Base directory for all data (default: data)"
-    )
-    
+    parser = argparse.ArgumentParser(description="Prepare notebook train/val/test splits")
     parser.add_argument(
         "--deepfashion",
         action="store_true",
@@ -397,49 +390,14 @@ Example:
     parser.add_argument(
         "--all",
         action="store_true",
-        help="Split all data sources"
-    )
-    
-    parser.add_argument(
-        "--include-synthetic",
-        action="store_true",
-        default=True,
-        help="Include synthetic degraded images (default: True)"
+        help="Split both DeepFashion and scraped data"
     )
     
     parser.add_argument(
         "--stratify",
         choices=["condition", "category", "price_range", "platform", "none"],
-        default="condition",
-        help="Stratification method (default: condition)"
-    )
-    
-    parser.add_argument(
-        "--train",
-        type=float,
-        default=0.7,
-        help="Training set ratio (default: 0.7)"
-    )
-    
-    parser.add_argument(
-        "--val",
-        type=float,
-        default=0.15,
-        help="Validation set ratio (default: 0.15)"
-    )
-    
-    parser.add_argument(
-        "--test",
-        type=float,
-        default=0.15,
-        help="Test set ratio (default: 0.15)"
-    )
-    
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed for reproducibility (default: 42)"
+        default=DEFAULT_STRATIFY,
+        help="Stratification key to use when splitting"
     )
     
     parser.add_argument(
@@ -451,17 +409,16 @@ Example:
     parser.add_argument(
         "--report",
         type=str,
-        help="Output file for split report (JSON)"
+        default=DEFAULT_REPORT_PATH,
+        help="Path for the split report JSON"
     )
     
     args = parser.parse_args()
+
+    if not any([args.deepfashion, args.scraped, args.all]):
+        args.all = True
     
     splitter = DataSplitter(
-        base_dir=args.base_dir,
-        train_ratio=args.train,
-        val_ratio=args.val,
-        test_ratio=args.test,
-        seed=args.seed
     )
     
     splitter.prepare_directories(clean=args.clean)
@@ -472,7 +429,7 @@ Example:
     
     if args.deepfashion:
         splitter.split_deepfashion_data(
-            include_synthetic=args.include_synthetic,
+            include_synthetic=True,
             stratify_by=args.stratify if args.stratify in ["condition", "category", "none"] else "condition"
         )
     
@@ -481,9 +438,7 @@ Example:
             stratify_by=args.stratify if args.stratify in ["condition", "price_range", "platform", "none"] else "condition"
         )
     
-    if args.report or args.all:
-        output_file = args.report or "data/processed/split_report.json"
-        splitter.generate_split_report(output_file=output_file)
+    splitter.generate_split_report(output_file=args.report)
     
     splitter.print_summary()
 

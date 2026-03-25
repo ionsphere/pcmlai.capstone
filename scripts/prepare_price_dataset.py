@@ -1,18 +1,24 @@
-import sys
 import argparse
 from pathlib import Path
 import pandas as pd
 import numpy as np
 import json
 import matplotlib.pyplot as plt
-import seaborn as sns
-from typing import List, Optional, Tuple
+from typing import Tuple
 from sklearn.model_selection import train_test_split
 
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.models.price import PriceRangeBinner
+
+
+DEFAULT_BINNING_STRATEGY = 'quantile'
+DEFAULT_BIN_COUNT = 5
+DEFAULT_TRAIN_RATIO = 0.7
+DEFAULT_VAL_RATIO = 0.15
+DEFAULT_TEST_RATIO = 0.15
+DEFAULT_RANDOM_SEED = 42
 
 
 def make_json_serializable(value):
@@ -27,20 +33,11 @@ def make_json_serializable(value):
     return value
 
 
-def load_features(features_dir: Path) -> Tuple[np.ndarray, List[str], dict]:
+def load_features(features_dir: Path) -> np.ndarray:
     print(f"Loading features from {features_dir}...")
     features = np.load(features_dir / 'features.npy')
     print(f"Loaded features: {features.shape}")
-    
-    with open(features_dir / 'feature_names.json', 'r') as f:
-        feature_names = json.load(f)
-    print(f"Loaded {len(feature_names)} feature names")
-    
-    with open(features_dir / 'metadata.json', 'r') as f:
-        metadata = json.load(f)
-    print(f"Loaded metadata")
-    
-    return features, feature_names, metadata
+    return features
 
 
 def analyze_price_distribution(
@@ -131,21 +128,19 @@ def analyze_price_distribution(
 def create_price_bins(
     df: pd.DataFrame,
     output_dir: Path,
-    strategy: str = 'quantile',
-    n_bins: int = 5,
-    custom_bins: Optional[List[float]] = None,
-    category_specific: bool = False
+    strategy: str = DEFAULT_BINNING_STRATEGY,
+    n_bins: int = DEFAULT_BIN_COUNT,
 ) -> Tuple[PriceRangeBinner, np.ndarray, np.ndarray]:
     print(f"Creating price bins (strategy: {strategy}, n_bins: {n_bins})...")
     
     prices = df['price'].values
-    categories = df['category'].values if category_specific and 'category' in df.columns else None
+    categories = None
     
     binner = PriceRangeBinner(
         strategy=strategy,
         n_bins=n_bins,
-        custom_bins=custom_bins,
-        category_specific=category_specific
+        custom_bins=None,
+        category_specific=False
     )
     
     bin_indices, bin_labels = binner.fit_transform(prices, categories)
@@ -196,10 +191,10 @@ def create_splits(
     labels: np.ndarray,
     df: pd.DataFrame,
     output_dir: Path,
-    train_ratio: float = 0.7,
-    val_ratio: float = 0.15,
-    test_ratio: float = 0.15,
-    random_seed: int = 42
+    train_ratio: float = DEFAULT_TRAIN_RATIO,
+    val_ratio: float = DEFAULT_VAL_RATIO,
+    test_ratio: float = DEFAULT_TEST_RATIO,
+    random_seed: int = DEFAULT_RANDOM_SEED
 ):
     print(f"Creating splits (train={train_ratio}, val={val_ratio}, test={test_ratio})...")
     
@@ -266,23 +261,11 @@ def main():
                         help='Path to original data CSV')
     parser.add_argument('--output-dir', type=str, required=True,
                         help='Output directory for prepared dataset')
-    parser.add_argument('--strategy', type=str, default='quantile',
-                        choices=['quantile', 'uniform', 'custom'],
-                        help='Binning strategy (default: quantile)')
-    parser.add_argument('--n-bins', type=int, default=5,
-                        help='Number of bins for quantile/uniform (default: 5)')
-    parser.add_argument('--custom-bins', type=float, nargs='+', default=None,
-                        help='Custom bin edges (e.g., 0 20 50 100 200 1000)')
-    parser.add_argument('--category-specific', action='store_true',
-                        help='Use category-specific bins')
-    parser.add_argument('--train-ratio', type=float, default=0.7,
-                        help='Training set ratio (default: 0.7)')
-    parser.add_argument('--val-ratio', type=float, default=0.15,
-                        help='Validation set ratio (default: 0.15)')
-    parser.add_argument('--test-ratio', type=float, default=0.15,
-                        help='Test set ratio (default: 0.15)')
-    parser.add_argument('--random-seed', type=int, default=42,
-                        help='Random seed for splits (default: 42)')
+    parser.add_argument('--strategy', type=str, default=DEFAULT_BINNING_STRATEGY,
+                        choices=['quantile', 'uniform'],
+                        help='Binning strategy')
+    parser.add_argument('--n-bins', type=int, default=DEFAULT_BIN_COUNT,
+                        help='Number of price bins')
     
     args = parser.parse_args()
     
@@ -292,22 +275,19 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     
     if not features_dir.exists():
-        print(f"Error: Features directory not found: {features_dir}")
-        sys.exit(1)
+        raise FileNotFoundError(f"Features directory not found: {features_dir}")
     
     if not data_csv.exists():
-        print(f"Error: Data CSV not found: {data_csv}")
-        sys.exit(1)
+        raise FileNotFoundError(f"Data CSV not found: {data_csv}")
     
-    features, feature_names, metadata = load_features(features_dir)
+    features = load_features(features_dir)
     
     print(f"Loading data from {data_csv}...")
     df = pd.read_csv(data_csv)
     print(f"Loaded {len(df)} samples")
     
     if 'price' not in df.columns:
-        print("Error: 'price' column not found in data CSV")
-        sys.exit(1)
+        raise ValueError("'price' column not found in data CSV")
     
     analyze_price_distribution(df, output_dir)
     
@@ -316,8 +296,6 @@ def main():
         output_dir,
         strategy=args.strategy,
         n_bins=args.n_bins,
-        custom_bins=args.custom_bins,
-        category_specific=args.category_specific
     )
     
     create_splits(
@@ -325,21 +303,15 @@ def main():
         bin_indices,
         df,
         output_dir,
-        train_ratio=args.train_ratio,
-        val_ratio=args.val_ratio,
-        test_ratio=args.test_ratio,
-        random_seed=args.random_seed
     )
     
     print("Price Dataset Preparation Summary")
     print(f"Input features: {features.shape}")
     print(f"Price bins: {len(np.unique(bin_indices))}")
     print(f"Binning strategy: {args.strategy}")
-    if args.category_specific:
-        print(f"Category-specific: Yes")
-    print(f"Train samples: {int(len(features) * args.train_ratio)}")
-    print(f"Val samples: {int(len(features) * args.val_ratio)}")
-    print(f"Test samples: {int(len(features) * args.test_ratio)}")
+    print(f"Train samples: {int(len(features) * DEFAULT_TRAIN_RATIO)}")
+    print(f"Val samples: {int(len(features) * DEFAULT_VAL_RATIO)}")
+    print(f"Test samples: {int(len(features) * DEFAULT_TEST_RATIO)}")
     print(f"Output directory: {output_dir}")
 
 

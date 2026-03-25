@@ -3,12 +3,10 @@
 import argparse
 import json
 import logging
-import os
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from collections import defaultdict, Counter
-import sys
 
 
 logging.basicConfig(
@@ -18,8 +16,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_BASE_DIR = "data"
+DEFAULT_SUMMARY_REPORT = "data/data_organization_report.json"
+DEFAULT_UNIFIED_FORMAT = "both"
+
+
 class DataOrganizer:
-    def __init__(self, base_dir: str = "data"):
+    def __init__(self, base_dir: str = DEFAULT_BASE_DIR):
         self.base_dir = Path(base_dir)
         
         self.deepfashion_dir = self.base_dir / "deepfashion"
@@ -498,128 +501,67 @@ class DataOrganizer:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Organize data from multiple sources into unified structure",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Create directory structure
-  python organize_data.py --create-dirs
-  
-  # Organize DeepFashion data from data/raw/deepfashion to data/deepfashion/original
-  python organize_data.py --organize-deepfashion
-  
-  # Organize with copying instead of symbolic links
-  python organize_data.py --organize-deepfashion --copy
-  
-  # Verify data sources
-  python organize_data.py --verify
-  
-  # Unify scraped data
-  python organize_data.py --unify --format both
-  
-  # Generate full summary report
-  python organize_data.py --summary --output data/summary_report.json
-  
-  # Do everything
-  python organize_data.py --all
-        """
-    )
-    
-    parser.add_argument(
-        "--base-dir",
-        type=str,
-        default="data",
-        help="Base directory for all data (default: data)"
-    )
-    
+    parser = argparse.ArgumentParser(description="Organize notebook data directories and reports")
     parser.add_argument(
         "--create-dirs",
         action="store_true",
-        help="Create the complete directory structure"
-    )
-    
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Force recreation of directories (removes existing)"
+        help="Create the expected data directory structure"
     )
     
     parser.add_argument(
         "--organize-deepfashion",
         action="store_true",
-        help="Organize DeepFashion data from data/raw/deepfashion to data/deepfashion/original"
+        help="Expose raw DeepFashion files under the canonical project layout"
     )
     
     parser.add_argument(
         "--copy",
         action="store_true",
-        help="Copy files instead of creating symbolic links (requires more disk space)"
-    )
-    
-    parser.add_argument(
-        "--deepfashion-source",
-        type=str,
-        default=None,
-        help="Custom source directory for DeepFashion data (default: data/raw/deepfashion)"
+        help="Copy instead of symlink when organizing DeepFashion"
     )
     
     parser.add_argument(
         "--verify",
         action="store_true",
-        help="Verify which data sources are available"
+        help="Report which expected data sources are currently available"
     )
     
     parser.add_argument(
         "--unify",
         action="store_true",
-        help="Unify scraped data from all platforms"
+        help="Combine scraped marketplace data into one unified dataset"
     )
     
     parser.add_argument(
         "--format",
         choices=["json", "csv", "both"],
-        default="both",
-        help="Output format for unified data (default: both)"
+        default=DEFAULT_UNIFIED_FORMAT,
+        help="Output format for unified scraped data"
     )
     
     parser.add_argument(
         "--summary",
         action="store_true",
-        help="Generate summary report"
+        help="Generate a summary report"
     )
     
     parser.add_argument(
         "--output",
         type=str,
-        help="Output file for summary report (JSON)"
-    )
-    
-    parser.add_argument(
-        "--all",
-        action="store_true",
-        help="Run all operations (create dirs, unify, summary)"
+        default=DEFAULT_SUMMARY_REPORT,
+        help="Path for the summary report JSON"
     )
     
     args = parser.parse_args()
     
-    organizer = DataOrganizer(base_dir=args.base_dir)
-    if args.all:
-        args.create_dirs = True
-        args.organize_deepfashion = True
-        args.verify = True
-        args.unify = True
-        args.summary = True
-        if not args.output:
-            args.output = "data/data_organization_report.json"
+    organizer = DataOrganizer()
     
     if args.create_dirs:
-        organizer.create_directory_structure(force=args.force)
+        organizer.create_directory_structure()
     
     if args.organize_deepfashion:
         organizer.organize_deepfashion_data(
             use_symlinks=not args.copy,
-            source_dir=args.deepfashion_source
         )
     
     if args.verify:

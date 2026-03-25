@@ -1,10 +1,10 @@
-import os
 import sys
 import argparse
 import json
 import time
+import copy
 from pathlib import Path
-from typing import Dict, Tuple, Optional
+from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
@@ -23,6 +23,37 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.models.vision import MultiTaskClothingModel, MultiTaskLoss, count_parameters
+
+
+DEFAULT_IMAGE_SIZE = 380
+DEFAULT_CONFIG = {
+    "model": {
+        "backbone": "efficientnet_b4",
+        "num_clothing_types": 1,
+        "condition_scale": 10,
+        "condition_mode": "regression",
+        "pretrained": True,
+        "freeze_backbone": False,
+    },
+    "training": {
+        "batch_size": 32,
+        "epochs": 50,
+        "num_workers": 0,
+        "learning_rate": 1e-4,
+        "weight_decay": 1e-5,
+        "min_lr": 1e-6,
+        "early_stopping_patience": 10,
+        "mixed_precision": True,
+    },
+}
+
+
+def build_config(quick_test: bool = False) -> Dict:
+    config = copy.deepcopy(DEFAULT_CONFIG)
+    if quick_test:
+        config["training"]["epochs"] = 2
+        config["training"]["batch_size"] = 8
+    return config
 
 
 class ConditionDataset(Dataset):
@@ -65,41 +96,7 @@ class ConditionDataset(Dataset):
 
         return candidates[0]
 
-
-def get_config_value(config: Dict, paths, default=None):
-    for path in paths:
-        value = config
-        found = True
-        for key in path:
-            if isinstance(value, dict) and key in value:
-                value = value[key]
-            else:
-                found = False
-                break
-        if found:
-            return value
-    return default
-
-
-def resolve_image_size(config: Dict) -> int:
-    image_size = get_config_value(
-        config,
-        [
-            ('training', 'image_size'),
-            ('dataset', 'image_size'),
-            ('model', 'image_size'),
-            ('model', 'input_size'),
-        ],
-        default=380,
-    )
-
-    if isinstance(image_size, (list, tuple)) and len(image_size) >= 2:
-        return int(image_size[1])
-
-    return int(image_size)
-
-
-def get_transforms(image_size: int = 380, augment: bool = True):
+def get_transforms(image_size: int = DEFAULT_IMAGE_SIZE, augment: bool = True):
     if augment:
         return transforms.Compose([
             transforms.Resize((image_size, image_size)),
@@ -244,16 +241,18 @@ def validate_epoch(
 
 def train_model(config: Dict, args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    use_amp = bool(get_config_value(config, [('mixed_precision', 'enabled'), ('training', 'mixed_precision')], default=True))
-    image_size = resolve_image_size(config)
-    batch_size = int(get_config_value(config, [('training', 'batch_size')], default=32))
-    num_workers = int(get_config_value(config, [('training', 'num_workers'), ('windows_compatibility', 'num_workers')], default=0))
-    learning_rate = float(get_config_value(config, [('training', 'learning_rate'), ('optimization', 'learning_rate')], default=1e-4))
-    weight_decay = float(get_config_value(config, [('training', 'weight_decay'), ('optimization', 'weight_decay')], default=1e-5))
-    epochs = int(get_config_value(config, [('training', 'epochs'), ('training', 'num_epochs')], default=50))
-    min_lr = float(get_config_value(config, [('training', 'min_lr'), ('scheduler', 'min_lr'), ('training', 'scheduler_params', 'eta_min')], default=1e-6))
-    early_stopping_patience = int(get_config_value(config, [('training', 'early_stopping_patience'), ('early_stopping', 'patience')], default=10))
-    pin_memory = bool(get_config_value(config, [('windows_compatibility', 'pin_memory')], default=(device.type == 'cuda')))
+    training_config = config["training"]
+    model_config = config["model"]
+    use_amp = bool(training_config["mixed_precision"])
+    image_size = DEFAULT_IMAGE_SIZE
+    batch_size = int(training_config["batch_size"])
+    num_workers = int(training_config["num_workers"])
+    learning_rate = float(training_config["learning_rate"])
+    weight_decay = float(training_config["weight_decay"])
+    epochs = int(training_config["epochs"])
+    min_lr = float(training_config["min_lr"])
+    early_stopping_patience = int(training_config["early_stopping_patience"])
+    pin_memory = device.type == 'cuda'
 
     print(f"Device: {device}")
     
@@ -300,20 +299,20 @@ def train_model(config: Dict, args):
     
     print(f"Creating model...")
     model = MultiTaskClothingModel(
-        backbone_name=config['model']['backbone'],
-        num_clothing_types=config['model']['num_clothing_types'],
-        condition_scale=config['model']['condition_scale'],
-        condition_mode=config['model']['condition_mode'],
-        pretrained=config['model']['pretrained'],
-        freeze_backbone=config['model'].get('freeze_backbone', False)
+        backbone_name=model_config['backbone'],
+        num_clothing_types=model_config['num_clothing_types'],
+        condition_scale=model_config['condition_scale'],
+        condition_mode=model_config['condition_mode'],
+        pretrained=model_config['pretrained'],
+        freeze_backbone=model_config['freeze_backbone']
     )
     model = model.to(device)
     
     params = count_parameters(model)
-    print(f"Backbone: {config['model']['backbone']}")
+    print(f"Backbone: {model_config['backbone']}")
     print(f"Parameters: {params['trainable']:,} trainable, {params['frozen']:,} frozen")
     
-    criterion = MultiTaskLoss(condition_mode=config['model']['condition_mode'])
+    criterion = MultiTaskLoss(condition_mode=model_config['condition_mode'])
     criterion = criterion.to(device)
     
     optimizer = optim.AdamW(
@@ -436,28 +435,18 @@ def main():
     parser.add_argument('--data-dir', type=str,
                         default='data/processed/condition_assessment',
                         help='Base directory for image paths')
-    parser.add_argument('--config', type=str, 
-                        default='configs/vision_model_config.json',
-                        help='Model configuration file')
     parser.add_argument('--output-dir', type=str,
                         default='models/condition_assessment',
                         help='Output directory for model and logs')
     parser.add_argument('--quick-test', action='store_true',
                         help='Quick test mode (2 epochs, small batch)')
-    parser.add_argument('--resume', type=str,
-                        help='Resume from checkpoint')
     
     args = parser.parse_args()
     
     print("CONDITION ASSESSMENT TRAINING")
-    
-    with open(args.config, 'r') as f:
-        config = json.load(f)
-    
+    config = build_config(quick_test=args.quick_test)
     if args.quick_test:
         print("Quick test mode enabled")
-        config['training']['epochs'] = 2
-        config['training']['batch_size'] = 8
     
     model, history = train_model(config, args)
     

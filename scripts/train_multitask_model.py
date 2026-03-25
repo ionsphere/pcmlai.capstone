@@ -1,7 +1,7 @@
 import argparse
+import copy
 import json
 import logging
-import os
 import sys
 import time
 from pathlib import Path
@@ -31,58 +31,52 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+DEFAULT_IMAGE_SIZE = 380
+DEFAULT_CONFIG = {
+    'train_csv': None,
+    'val_csv': None,
+    'image_size': DEFAULT_IMAGE_SIZE,
+    'backbone': 'efficientnet_b4',
+    'pretrained': True,
+    'condition_mode': 'regression',
+    'condition_scale': 10,
+    'num_clothing_types': None,
+    'freeze_backbone': False,
+    'batch_size': 32,
+    'epochs': 50,
+    'num_workers': 0,
+    'seed': 42,
+    'learn_task_weights': True,
+    'optimizer': 'adamw',
+    'learning_rate': 1e-4,
+    'weight_decay': 1e-5,
+    'momentum': 0.9,
+    'grad_clip': 1.0,
+    'scheduler': 'cosine',
+    'min_lr': 1e-6,
+    'step_size': 10,
+    'gamma': 0.1,
+    'factor': 0.5,
+    'lr_patience': 5,
+    'early_stopping_patience': 10,
+    'save_every': 10,
+    'pin_memory': False,
+}
 
-def get_config_value(config: dict, paths, default=None):
-    for path in paths:
-        value = config
-        found = True
-        for key in path:
-            if isinstance(value, dict) and key in value:
-                value = value[key]
-            else:
-                found = False
-                break
-        if found:
-            return value
-    return default
 
-
-def resolve_training_config(config: dict) -> dict:
-    image_size = get_config_value(config, [('dataset', 'image_size'), ('image_size',)], 380)
-    if isinstance(image_size, (list, tuple)) and len(image_size) >= 2:
-        image_size = int(image_size[1])
-
-    return {
-        'train_csv': get_config_value(config, [('dataset', 'train_csv'), ('train_csv',)]),
-        'val_csv': get_config_value(config, [('dataset', 'val_csv'), ('val_csv',)]),
-        'test_csv': get_config_value(config, [('dataset', 'test_csv'), ('test_csv',)]),
-        'image_size': int(image_size),
-        'backbone': get_config_value(config, [('model', 'backbone'), ('backbone',)], 'efficientnet_b4'),
-        'pretrained': bool(get_config_value(config, [('model', 'pretrained'), ('pretrained',)], True)),
-        'condition_mode': get_config_value(config, [('model', 'condition_mode'), ('condition_mode',)], 'regression'),
-        'condition_scale': int(get_config_value(config, [('model', 'condition_scale'), ('condition_scale',)], 10)),
-        'num_clothing_types': get_config_value(config, [('model', 'num_clothing_types'), ('model', 'num_clothing_categories'), ('num_clothing_types',)]),
-        'freeze_backbone': bool(get_config_value(config, [('model', 'freeze_backbone'), ('freeze_backbone',)], False)),
-        'batch_size': int(get_config_value(config, [('training', 'batch_size'), ('batch_size',)], 32)),
-        'epochs': int(get_config_value(config, [('training', 'epochs'), ('epochs',)], 50)),
-        'num_workers': int(get_config_value(config, [('windows_compatibility', 'num_workers'), ('training', 'num_workers'), ('num_workers',)], 0)),
-        'seed': int(get_config_value(config, [('training', 'seed'), ('seed',)], 42)),
-        'learn_task_weights': bool(get_config_value(config, [('multitask_loss', 'learn_task_weights'), ('learn_task_weights',)], True)),
-        'optimizer': get_config_value(config, [('optimization', 'optimizer'), ('optimizer',)], 'adamw'),
-        'learning_rate': float(get_config_value(config, [('optimization', 'learning_rate'), ('learning_rate',)], 1e-4)),
-        'weight_decay': float(get_config_value(config, [('optimization', 'weight_decay'), ('weight_decay',)], 1e-5)),
-        'momentum': float(get_config_value(config, [('optimization', 'momentum'), ('momentum',)], 0.9)),
-        'grad_clip': float(get_config_value(config, [('optimization', 'grad_clip'), ('grad_clip',)], 1.0)),
-        'scheduler': get_config_value(config, [('scheduler', 'type'), ('scheduler',)], 'cosine'),
-        'min_lr': float(get_config_value(config, [('scheduler', 'min_lr'), ('min_lr',)], 1e-6)),
-        'step_size': int(get_config_value(config, [('scheduler', 'step_size'), ('step_size',)], 10)),
-        'gamma': float(get_config_value(config, [('scheduler', 'gamma'), ('gamma',)], 0.1)),
-        'factor': float(get_config_value(config, [('scheduler', 'factor'), ('factor',)], 0.5)),
-        'lr_patience': int(get_config_value(config, [('scheduler', 'lr_patience'), ('lr_patience',)], 5)),
-        'early_stopping_patience': int(get_config_value(config, [('early_stopping', 'patience'), ('early_stopping_patience',)], 10)),
-        'save_every': int(get_config_value(config, [('checkpointing', 'save_every'), ('save_every',)], 10)),
-        'pin_memory': bool(get_config_value(config, [('windows_compatibility', 'pin_memory')], False)),
-    }
+def build_training_config(
+    train_csv: Optional[str] = None,
+    val_csv: Optional[str] = None,
+    quick_test: bool = False,
+) -> dict:
+    config = copy.deepcopy(DEFAULT_CONFIG)
+    config['train_csv'] = train_csv
+    config['val_csv'] = val_csv
+    if quick_test:
+        config['batch_size'] = 8
+        config['epochs'] = 2
+        config['save_every'] = 1
+    return config
 
 
 class MultiTaskClothingDataset(Dataset):
@@ -128,8 +122,7 @@ class MultiTaskClothingDataset(Dataset):
 
 
 def get_transforms(config: dict, is_training: bool = True) -> transforms.Compose:
-    resolved = resolve_training_config(config)
-    img_size = resolved['image_size']
+    img_size = int(config['image_size'])
     if is_training:
         return transforms.Compose([
             transforms.Resize((img_size, img_size)),
@@ -347,9 +340,8 @@ def validate(
 
 
 def train_model(config: dict, output_dir: Path) -> Dict[str, any]:
-    resolved = resolve_training_config(config)
-    if not resolved['train_csv'] or not resolved['val_csv']:
-        raise ValueError("Training config must provide dataset.train_csv and dataset.val_csv (or top-level train_csv/val_csv).")
+    if not config['train_csv'] or not config['val_csv']:
+        raise ValueError("Both train_csv and val_csv are required.")
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger.info(f"Using device: {device}")
@@ -364,7 +356,7 @@ def train_model(config: dict, output_dir: Path) -> Dict[str, any]:
     with open(output_dir / 'config.json', 'w') as f:
         json.dump(config, f, indent=2)
     
-    seed = resolved['seed']
+    seed = config['seed']
     torch.manual_seed(seed)
     np.random.seed(seed)
     if torch.cuda.is_available():
@@ -374,102 +366,102 @@ def train_model(config: dict, output_dir: Path) -> Dict[str, any]:
     val_transform = get_transforms(config, is_training=False)
     
     train_dataset = MultiTaskClothingDataset(
-        resolved['train_csv'],
+        config['train_csv'],
         transform=train_transform,
         is_training=True
     )
     
     val_dataset = MultiTaskClothingDataset(
-        resolved['val_csv'],
+        config['val_csv'],
         transform=val_transform,
         is_training=False
     )
     
     train_loader = DataLoader(
         train_dataset,
-        batch_size=resolved['batch_size'],
+        batch_size=config['batch_size'],
         shuffle=True,
-        num_workers=resolved['num_workers'],
-        pin_memory=resolved['pin_memory'] if device.type == 'cuda' else False
+        num_workers=config['num_workers'],
+        pin_memory=config['pin_memory'] if device.type == 'cuda' else False
     )
     
     val_loader = DataLoader(
         val_dataset,
-        batch_size=resolved['batch_size'],
+        batch_size=config['batch_size'],
         shuffle=False,
-        num_workers=resolved['num_workers'],
-        pin_memory=resolved['pin_memory'] if device.type == 'cuda' else False
+        num_workers=config['num_workers'],
+        pin_memory=config['pin_memory'] if device.type == 'cuda' else False
     )
 
     if len(train_loader) == 0:
-        raise ValueError(f"Training dataset is empty: {resolved['train_csv']}")
+        raise ValueError(f"Training dataset is empty: {config['train_csv']}")
     if len(val_loader) == 0:
-        raise ValueError(f"Validation dataset is empty: {resolved['val_csv']}")
+        raise ValueError(f"Validation dataset is empty: {config['val_csv']}")
     
     # Create model
     num_categories = train_dataset.num_categories
     model = MultiTaskClothingModel(
-        backbone_name=resolved['backbone'],
-        num_clothing_types=int(resolved['num_clothing_types'] or num_categories),
-        condition_scale=resolved['condition_scale'],
-        condition_mode=resolved['condition_mode'],
-        pretrained=resolved['pretrained'],
-        freeze_backbone=resolved['freeze_backbone']
+        backbone_name=config['backbone'],
+        num_clothing_types=int(config['num_clothing_types'] or num_categories),
+        condition_scale=config['condition_scale'],
+        condition_mode=config['condition_mode'],
+        pretrained=config['pretrained'],
+        freeze_backbone=config['freeze_backbone']
     )
     model = model.to(device)
     
-    logger.info(f"Model: {resolved['backbone']}")
+    logger.info(f"Model: {config['backbone']}")
     logger.info(f"Number of categories: {num_categories}")
     logger.info(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
     logger.info(f"Trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
     
     multitask_loss = MultiTaskLoss(
         num_tasks=2,
-        learn_weights=resolved['learn_task_weights']
+        learn_weights=config['learn_task_weights']
     )
     
-    optimizer_name = resolved['optimizer'].lower()
+    optimizer_name = config['optimizer'].lower()
     if optimizer_name == 'adamw':
         optimizer = optim.AdamW(
             model.parameters(),
-            lr=resolved['learning_rate'],
-            weight_decay=resolved['weight_decay']
+            lr=config['learning_rate'],
+            weight_decay=config['weight_decay']
         )
     elif optimizer_name == 'adam':
         optimizer = optim.Adam(
             model.parameters(),
-            lr=resolved['learning_rate'],
-            weight_decay=resolved['weight_decay']
+            lr=config['learning_rate'],
+            weight_decay=config['weight_decay']
         )
     elif optimizer_name == 'sgd':
         optimizer = optim.SGD(
             model.parameters(),
-            lr=resolved['learning_rate'],
-            momentum=resolved['momentum'],
-            weight_decay=resolved['weight_decay']
+            lr=config['learning_rate'],
+            momentum=config['momentum'],
+            weight_decay=config['weight_decay']
         )
     else:
         raise ValueError(f"Unknown optimizer: {optimizer_name}")
     
-    scheduler_name = resolved['scheduler'].lower()
+    scheduler_name = config['scheduler'].lower()
     if scheduler_name == 'cosine':
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            T_max=resolved['epochs'],
-            eta_min=resolved['min_lr']
+            T_max=config['epochs'],
+            eta_min=config['min_lr']
         )
     elif scheduler_name == 'step':
         scheduler = optim.lr_scheduler.StepLR(
             optimizer,
-            step_size=resolved['step_size'],
-            gamma=resolved['gamma']
+            step_size=config['step_size'],
+            gamma=config['gamma']
         )
     elif scheduler_name == 'reduce':
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             mode='min',
-            factor=resolved['factor'],
-            patience=resolved['lr_patience']
+            factor=config['factor'],
+            patience=config['lr_patience']
         )
     else:
         scheduler = None
@@ -480,7 +472,7 @@ def train_model(config: dict, output_dir: Path) -> Dict[str, any]:
     best_val_loss = float('inf')
     best_val_acc = 0.0
     patience_counter = 0
-    patience = resolved['early_stopping_patience']
+    patience = config['early_stopping_patience']
     history = {
         'train_loss': [],
         'train_accuracy': [],
@@ -495,7 +487,7 @@ def train_model(config: dict, output_dir: Path) -> Dict[str, any]:
     logger.info("Starting training...")
     start_time = time.time()
     
-    for epoch in range(1, resolved['epochs'] + 1):
+    for epoch in range(1, config['epochs'] + 1):
         epoch_start = time.time()
         
         train_metrics = train_epoch(
@@ -512,7 +504,7 @@ def train_model(config: dict, output_dir: Path) -> Dict[str, any]:
                 scheduler.step()
         
         current_lr = optimizer.param_groups[0]['lr']
-        logger.info(f"Epoch {epoch}/{resolved['epochs']}")
+        logger.info(f"Epoch {epoch}/{config['epochs']}")
         logger.info(f"Train - Loss: {train_metrics['loss']:.4f}, "
                    f"Acc: {train_metrics['accuracy']:.2f}%, "
                    f"MAE: {train_metrics['condition_mae']:.4f}")
@@ -564,7 +556,7 @@ def train_model(config: dict, output_dir: Path) -> Dict[str, any]:
             best_val_acc = val_metrics['accuracy']
             torch.save(checkpoint, checkpoint_dir / 'best_accuracy.pth')
         
-        if epoch % resolved['save_every'] == 0:
+        if epoch % config['save_every'] == 0:
             torch.save(checkpoint, checkpoint_dir / f'epoch_{epoch}.pth')
         
         if patience_counter >= patience:
@@ -633,11 +625,6 @@ def create_mock_dataset(output_dir: Path, num_samples: int = 100):
 def main():
     parser = argparse.ArgumentParser(description="Multi-Task Model Training")
     parser.add_argument(
-        '--config',
-        type=str,
-        help='Path to training configuration JSON file'
-    )
-    parser.add_argument(
         '--train-csv',
         type=str,
         help='Path to training CSV file'
@@ -675,24 +662,11 @@ def main():
         logger.info("Running quick test mode...")
         mock_dir = Path('data/processed/multitask_mock')
         create_mock_dataset(mock_dir, num_samples=100)
-        config = {
-            'train_csv': str(mock_dir / 'train.csv'),
-            'val_csv': str(mock_dir / 'val.csv'),
-            'batch_size': 8,
-            'epochs': 2,
-            'learning_rate': 1e-4,
-            'backbone': 'efficientnet_b4',
-            'pretrained': True,
-            'image_size': 380,
-            'num_workers': 0,
-            'seed': 42,
-            'learn_task_weights': True,
-            'optimizer': 'adamw',
-            'scheduler': 'cosine',
-            'early_stopping_patience': 10,
-            'grad_clip': 1.0,
-            'save_every': 1
-        }
+        config = build_training_config(
+            train_csv=str(mock_dir / 'train.csv'),
+            val_csv=str(mock_dir / 'val.csv'),
+            quick_test=True,
+        )
         
         train_model(config, Path(args.output_dir) / 'quick_test')
         return
@@ -702,17 +676,13 @@ def main():
         create_mock_dataset(mock_dir, num_samples=args.mock_samples)
         return
     
-    if args.config:
-        with open(args.config, 'r') as f:
-            config = json.load(f)
-    else:
-        if not args.train_csv or not args.val_csv:
-            parser.error("Either --config or both --train-csv and --val-csv must be provided")
-        
-        config = {
-            'train_csv': args.train_csv,
-            'val_csv': args.val_csv
-        }
+    if not args.train_csv or not args.val_csv:
+        parser.error("Both --train-csv and --val-csv are required")
+    
+    config = build_training_config(
+        train_csv=args.train_csv,
+        val_csv=args.val_csv,
+    )
     
     results = train_model(config, Path(args.output_dir))
     

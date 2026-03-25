@@ -3,13 +3,17 @@
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
 
 PROJECT_ROOT = Path(__file__).parent.parent
+DEFAULT_DEEPFASHION2_CSV = 'data/processed/deepfashion2_processed.csv'
+DEFAULT_SYNTHETIC_ROOT = 'data/deepfashion/synthetic_degraded'
+DEFAULT_OUTPUT_DIR = 'data/processed/multitask'
+DEFAULT_RANDOM_SEED = 42
 DEEPFASHION2_TO_STANDARD = {
     "short sleeve top": "t-shirt",
     "long sleeve top": "shirt",
@@ -109,14 +113,14 @@ def save_splits(df: pd.DataFrame, output_dir: Path):
         train_df, temp_df = train_test_split(
             df.drop(columns=['split'], errors='ignore'),
             test_size=0.30,
-            random_state=42,
+            random_state=DEFAULT_RANDOM_SEED,
             stratify=stratify_col,
         )
         temp_stratify = temp_df['category'] if stratify_col is not None else None
         val_df, test_df = train_test_split(
             temp_df,
             test_size=0.50,
-            random_state=42,
+            random_state=DEFAULT_RANDOM_SEED,
             stratify=temp_stratify,
         )
         split_frames = {'train': train_df, 'val': val_df, 'test': test_df}
@@ -152,17 +156,17 @@ def main():
     parser = argparse.ArgumentParser(description="Prepare multitask training dataset")
     parser.add_argument(
         '--deepfashion2-csv',
-        default='data/processed/deepfashion2_processed.csv',
+        default=DEFAULT_DEEPFASHION2_CSV,
         help='Path to processed DeepFashion2 CSV'
     )
     parser.add_argument(
         '--synthetic-root',
-        default='data/deepfashion/synthetic_degraded',
+        default=DEFAULT_SYNTHETIC_ROOT,
         help='Root directory containing synthetic degradation outputs'
     )
     parser.add_argument(
         '--output-dir',
-        default='data/processed/multitask',
+        default=DEFAULT_OUTPUT_DIR,
         help='Output directory for multitask CSV splits'
     )
     args = parser.parse_args()
@@ -180,7 +184,8 @@ def main():
 
     save_splits(df, output_dir)
     print(f"Saved multitask dataset to {output_dir}")
-    print(df[['category', 'condition_score']].head())
+    print(f"Rows: {len(df)}")
+    print(f"Categories: {df['category'].nunique()}")
 
 
 if __name__ == '__main__':
