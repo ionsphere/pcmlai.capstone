@@ -1,0 +1,197 @@
+[build-system]
+requires = ["setuptools>=68.0.0,<69.0.0", "wheel>=0.41.0,<0.42.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clothing-price-predictor"
+version = "0.1.0"
+description = "End-to-end ML pipeline for clothing condition assessment and price prediction"
+readme = "README.md"
+requires-python = ">=3.9,<3.13"
+license = {text = "MIT"}
+authors = [
+    {name = "Data Science Team"}
+]
+keywords = ["machine-learning", "computer-vision", "fashion", "price-prediction", "deep-learning"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+
+dependencies = [
+    # Core Data Science
+    "numpy>=1.24.0,<1.27.0",
+    "pandas>=2.0.0,<2.3.0",
+    "scipy>=1.11.0,<1.14.0",
+    
+    # Computer Vision & Image Processing
+    "opencv-python>=4.8.0,<4.11.0",
+    "Pillow>=10.0.0,<10.5.0",
+    "albumentations>=1.3.0,<1.5.0",
+    "imageio>=2.31.0,<2.36.0",
+    
+    # Deep Learning - PyTorch
+    "torch>=2.1.0,<2.5.0",
+    "torchvision>=0.16.0,<0.20.0",
+    "tensorboard>=2.14.0,<2.19.0",
+    "timm>=0.9.0,<1.1.0",
+    "transformers>=4.35.0,<4.46.0",
+    
+    # Machine Learning
+    "scikit-learn>=1.3.0,<1.6.0",
+    "xgboost>=2.0.0,<2.2.0",
+    "lightgbm>=4.1.0,<4.6.0",
+    
+    # Web Scraping
+    "requests>=2.31.0,<2.33.0",
+    "gdown>=5.2.0,<5.3.0",
+    "beautifulsoup4>=4.12.0,<4.13.0",
+    "selenium>=4.15.0,<4.26.0",
+    "lxml>=4.9.0,<5.4.0",
+    "html5lib>=1.1,<1.2",
+    
+    # Kaggle API
+    "kaggle>=1.5.0,<1.7.0",
+    "opendatasets>=0.1.22,<0.2.0",
+    
+    # Data Processing & Validation
+    "pydantic>=2.4.0,<2.10.0",
+    "python-dotenv>=1.0.0,<1.1.0",
+    "pyyaml>=6.0.0,<6.1.0",
+    "tqdm>=4.66.0,<4.67.0",
+    
+    # Utilities
+    "click>=8.1.0,<8.2.0",
+    "loguru>=0.7.0,<0.8.0",
+    "python-dateutil>=2.8.0,<2.10.0",
+    
+    # File handling
+    "pyarrow>=14.0.0,<18.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0,<8.4.0",
+    "pytest-cov>=4.1.0,<6.1.0",
+    "pytest-xdist>=3.3.0,<3.7.0",
+    "black>=23.10.0,<24.11.0",
+    "isort>=5.12.0,<5.14.0",
+    "flake8>=6.1.0,<7.2.0",
+    "mypy>=1.6.0,<1.14.0",
+    "pre-commit>=3.5.0,<4.1.0",
+]
+
+notebook = [
+    "jupyter>=1.0.0,<1.2.0",
+    "jupyterlab>=4.0.0,<4.3.0",
+    "ipywidgets>=8.1.0,<8.2.0",
+    "matplotlib>=3.8.0,<3.10.0",
+    "seaborn>=0.13.0,<0.14.0",
+    "plotly>=5.17.0,<5.25.0",
+]
+
+api = [
+    "fastapi>=0.104.0,<0.116.0",
+    "uvicorn>=0.24.0,<0.32.0",
+    "python-multipart>=0.0.6,<0.0.14",
+    "aiofiles>=23.2.0,<24.2.0",
+]
+
+vector = [
+    "faiss-cpu>=1.7.4,<1.9.0",
+    "sentence-transformers>=2.2.0,<3.3.0",
+    "chromadb>=0.4.15,<0.6.0",
+]
+
+llm = [
+    "llama-cpp-python>=0.2.18,<0.3.3",
+    "vllm>=0.2.0,<0.7.0",
+]
+
+all = [
+    "clothing-price-predictor[dev,notebook,api,vector,llm]",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/clothing-price-predictor"
+Documentation = "https://github.com/your-org/clothing-price-predictor/docs"
+Repository = "https://github.com/your-org/clothing-price-predictor"
+Issues = "https://github.com/your-org/clothing-price-predictor/issues"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.setuptools.package-data]
+src = ["py.typed"]
+
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | data
+  | models
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_gitignore = true
+extend_skip_glob = ["data/*", "models/*"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --cov=src --cov-report=term-missing"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+exclude = [
+    "^data/",
+    "^models/",
+    "^notebooks/",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
