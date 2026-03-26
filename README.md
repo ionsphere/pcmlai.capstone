@@ -89,6 +89,8 @@ src folder contains the parts that required actual implementation effort:
 * vector search and llm - side implementations that are used by the api.
 * api - the accessible portal to use the models for new customer inputs.
 
+[Full Notebook](all_in_one.ipynb)
+
 ## Training process
 
 ### 1. Images
