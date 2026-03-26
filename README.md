@@ -139,5 +139,6 @@ And confusion matrix:
 ![Confusion matrix](images/confusion_matrix.png)
 
 
-## Embedding for KNN responses
+## Embedding for KNN and LLM Responses
 
+To launch the API run start_api.ps1. Sadly, LLM and Vector integration requires a lot of manual setup and is not available as the end solution of this project.
