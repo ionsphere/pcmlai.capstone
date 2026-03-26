@@ -558,8 +558,7 @@ def main(argv: Optional[Sequence[str]] = None):
         df = load_deepfashion_annotations(deepfashion_root)
         
         if df is None or len(df) == 0:
-            print(" Failed to load DeepFashion dataset")
-            print("Use --mock flag to create a mock dataset for testing")
+            print("Failed to load DeepFashion dataset")
             return
         
         df = map_categories_to_standard(df)
@@ -598,7 +597,7 @@ def main(argv: Optional[Sequence[str]] = None):
     save_dataset_info(output_dir, train_df, val_df, test_df, category_to_idx, image_root=image_root)
     verify_dataset(output_dir)
     
-    print(" DATASET PREPARATION COMPLETE!")
+    print("DATASET PREPARATION COMPLETE!")
     print(f"Output directory: {output_dir}")
 
 

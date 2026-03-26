@@ -4,10 +4,9 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import Sequence, Optional, Dict, List, Tuple
+from typing import Sequence, Optional, Dict, List
 
 import pandas as pd
-import yaml
 from tqdm import tqdm
 
 
@@ -19,15 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class DeepFashionProcessor:
-    def __init__(self, config_path: Path):
-        self.config = self.load_config(config_path)
+    def __init__(self):
         self.master_inventory = []
-        
-    def load_config(self, config_path: Path) -> Dict:
-        logger.info(f"Loading configuration from: {config_path}")
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-        return config
     
     def process_all(self, input_dir: Path, output_dir: Path):
         logger.info("Starting DeepFashion dataset processing...")
@@ -271,19 +263,12 @@ def main(argv: Optional[Sequence[str]] = None):
         required=True,
         help="Output directory for processed CSV files",
     )
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=Path("configs/deepfashion_sources.yaml"),
-        help="Configuration file path",
-    )
-    
     args = parser.parse_args(argv)
     if not args.input.exists():
         logger.error(f"Input directory does not exist: {args.input}")
         return 1
     
-    processor = DeepFashionProcessor(args.config)
+    processor = DeepFashionProcessor()
     processor.process_all(args.input, args.output)
     
     return 0

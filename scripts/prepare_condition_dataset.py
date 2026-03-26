@@ -166,7 +166,7 @@ def prepare_deepfashion_condition_dataset(
     if df_dir.exists():
         print(f"Processing original images (condition {pristine_label})...")
         image_files = list(df_dir.glob("**/*.jpg")) + list(df_dir.glob("**/*.png"))
-        for img_path in tqdm(image_files[:10000], desc="Original"):  # Limit for memory
+        for img_path in tqdm(image_files[:10000], desc="Original"):
             data_records.append({
                 'image_path': str(img_path),
                 'condition_score': pristine_label,
@@ -241,7 +241,7 @@ def main(argv: Optional[Sequence[str]] = None):
         )
     
     if splits:
-        print(" DATASET PREPARATION COMPLETE")
+        print("DATASET PREPARATION COMPLETE")
         print(f"Dataset saved to: {args.output_dir}")
     else:
         print(f"No dataset prepared. Use --mock for testing.")

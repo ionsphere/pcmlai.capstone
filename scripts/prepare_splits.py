@@ -413,9 +413,7 @@ def main(argv: Optional[Sequence[str]] = None):
     if not any([args.deepfashion, args.scraped, args.all]):
         args.all = True
     
-    splitter = DataSplitter(
-    )
-    
+    splitter = DataSplitter()
     splitter.prepare_directories(clean=args.clean)
     
     if args.all:
@@ -434,7 +432,6 @@ def main(argv: Optional[Sequence[str]] = None):
         )
     
     splitter.generate_split_report(output_file=args.report)
-    
     splitter.print_summary()
 
 

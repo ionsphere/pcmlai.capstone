@@ -40,7 +40,11 @@ DEFAULT_TRAINING_CONFIG = {
         "learning_rate": 1e-4,
         "weight_decay": 1e-5,
         "optimizer": "AdamW",
-        "scheduler": "CosineAnnealingLR",
+#        "optimizer": "Adam",
+#        "optimizer": "SGD",
+#        "scheduler": "CosineAnnealingLR",
+#        "scheduler": "ReduceLROnPlateau",
+        "scheduler": "StepLR",
         "scheduler_params": {
             "T_max": 50,
             "eta_min": 1e-6,
