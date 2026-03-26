@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Sequence, Optional
 from datetime import datetime
 import time
 
@@ -14,7 +15,49 @@ sys.path.insert(0, str(project_root))
 from src.data.synthetic import batch_generate_synthetic_data
 
 
-def parse_args():
+def validate_args(args):
+    errors = []
+    input_path = Path(args.input_dir)
+    if not input_path.exists():
+        errors.append(f"Input directory does not exist: {args.input_dir}")
+    
+    if args.condition_min > args.condition_max:
+        errors.append(f"condition-min ({args.condition_min}) must be <= condition-max ({args.condition_max})")
+    
+    if args.num_variations < 1:
+        errors.append(f"num-variations must be >= 1, got {args.num_variations}")
+    
+    if args.max_images is not None and args.max_images < 1:
+        errors.append(f"max-images must be >= 1, got {args.max_images}")
+    
+    return errors
+
+
+def estimate_generation(input_dir: str, num_variations: int, max_images: int = None):
+    input_path = Path(input_dir)
+    image_extensions = {'.jpg', '.jpeg', '.png', '.bmp'}
+    image_files = [
+        f for f in input_path.rglob('*') 
+        if f.suffix.lower() in image_extensions
+    ]
+    
+    if max_images:
+        image_files = image_files[:max_images]
+    
+    total_source = len(image_files)
+    total_generated = total_source * num_variations
+    estimated_size_mb = (total_generated * 200) / 1024
+    estimated_time_min = (total_generated * 0.5) / 60
+    
+    return {
+        'total_source': total_source,
+        'total_generated': total_generated,
+        'estimated_size_mb': estimated_size_mb,
+        'estimated_time_min': estimated_time_min
+    }
+
+
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(
         description="Generate synthetic clothing degradation data",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -82,53 +125,7 @@ Example:
         help='Show what would be generated without actually processing'
     )
     
-    return parser.parse_args()
-
-
-def validate_args(args):
-    errors = []
-    input_path = Path(args.input_dir)
-    if not input_path.exists():
-        errors.append(f"Input directory does not exist: {args.input_dir}")
-    
-    if args.condition_min > args.condition_max:
-        errors.append(f"condition-min ({args.condition_min}) must be <= condition-max ({args.condition_max})")
-    
-    if args.num_variations < 1:
-        errors.append(f"num-variations must be >= 1, got {args.num_variations}")
-    
-    if args.max_images is not None and args.max_images < 1:
-        errors.append(f"max-images must be >= 1, got {args.max_images}")
-    
-    return errors
-
-
-def estimate_generation(input_dir: str, num_variations: int, max_images: int = None):
-    input_path = Path(input_dir)
-    image_extensions = {'.jpg', '.jpeg', '.png', '.bmp'}
-    image_files = [
-        f for f in input_path.rglob('*') 
-        if f.suffix.lower() in image_extensions
-    ]
-    
-    if max_images:
-        image_files = image_files[:max_images]
-    
-    total_source = len(image_files)
-    total_generated = total_source * num_variations
-    estimated_size_mb = (total_generated * 200) / 1024
-    estimated_time_min = (total_generated * 0.5) / 60
-    
-    return {
-        'total_source': total_source,
-        'total_generated': total_generated,
-        'estimated_size_mb': estimated_size_mb,
-        'estimated_time_min': estimated_time_min
-    }
-
-
-def main():
-    args = parse_args()
+    args = parser.parse_args(argv)
     errors = validate_args(args)
     if errors:
         print("Validation Errors:")

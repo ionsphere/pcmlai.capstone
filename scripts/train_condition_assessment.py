@@ -4,7 +4,7 @@ import json
 import time
 import copy
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Sequence, Optional, Dict
 import numpy as np
 import pandas as pd
 
@@ -356,7 +356,7 @@ def train_model(config: Dict, args):
         
         print(f"Epoch {epoch} Results:")
         print(f"Train - Loss: {train_metrics['loss']:.4f}, MAE: {train_metrics['mae']:.4f}, RMSE: {train_metrics['rmse']:.4f}, R^2: {train_metrics['r2']:.4f}")
-        print(f"Val   - Loss: {val_metrics['loss']:.4f}, MAE: {val_metrics['mae']:.4f}, RMSE: {val_metrics['rmse']:.4f}, R^2: {val_metrics['r2']:.4f}")
+        print(f"Val - Loss: {val_metrics['loss']:.4f}, MAE: {val_metrics['mae']:.4f}, RMSE: {val_metrics['rmse']:.4f}, R^2: {val_metrics['r2']:.4f}")
         print(f"LR: {current_lr:.6f}")
         
         writer.add_scalar('Train/Loss', train_metrics['loss'], epoch)
@@ -424,7 +424,7 @@ def train_model(config: Dict, args):
     return model, history
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(description="Train condition assessment model")
     parser.add_argument('--train-csv', type=str, 
                         default='data/processed/condition_assessment/train.csv',
@@ -441,7 +441,7 @@ def main():
     parser.add_argument('--quick-test', action='store_true',
                         help='Quick test mode (2 epochs, small batch)')
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     
     print("CONDITION ASSESSMENT TRAINING")
     config = build_config(quick_test=args.quick_test)

@@ -5,7 +5,7 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Sequence, Optional, Dict, List
 from collections import defaultdict, Counter
 
 
@@ -500,51 +500,44 @@ class DataOrganizer:
         logger.info(f"Total Items: {total:,}")
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(description="Organize notebook data directories and reports")
     parser.add_argument(
         "--create-dirs",
         action="store_true",
         help="Create the expected data directory structure"
     )
-    
     parser.add_argument(
         "--organize-deepfashion",
         action="store_true",
         help="Expose raw DeepFashion files under the canonical project layout"
     )
-    
     parser.add_argument(
         "--copy",
         action="store_true",
         help="Copy instead of symlink when organizing DeepFashion"
     )
-    
     parser.add_argument(
         "--verify",
         action="store_true",
         help="Report which expected data sources are currently available"
     )
-    
     parser.add_argument(
         "--unify",
         action="store_true",
         help="Combine scraped marketplace data into one unified dataset"
     )
-    
     parser.add_argument(
         "--format",
         choices=["json", "csv", "both"],
         default=DEFAULT_UNIFIED_FORMAT,
         help="Output format for unified scraped data"
     )
-    
     parser.add_argument(
         "--summary",
         action="store_true",
         help="Generate a summary report"
     )
-    
     parser.add_argument(
         "--output",
         type=str,
@@ -552,7 +545,7 @@ def main():
         help="Path for the summary report JSON"
     )
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     
     organizer = DataOrganizer()
     

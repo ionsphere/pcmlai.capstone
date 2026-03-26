@@ -4,7 +4,7 @@ import argparse
 import time
 import copy
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Sequence, Optional, Dict
 
 
 project_root = Path(__file__).parent.parent
@@ -474,7 +474,7 @@ def create_transforms(image_size: int = DEFAULT_IMAGE_SIZE, is_train: bool = Tru
     return transforms.Compose(transform_list)
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(description="Train clothing type classification model")
     parser.add_argument('--data-dir', type=str, default='data/processed/clothing_type',
                        help='Path to prepared dataset')
@@ -491,7 +491,7 @@ def main():
     parser.add_argument('--device', type=str, default='cuda',
                        help='Device to use (cuda or cpu)')
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     config = build_config(
         batch_size=args.batch_size,
         epochs=args.epochs,

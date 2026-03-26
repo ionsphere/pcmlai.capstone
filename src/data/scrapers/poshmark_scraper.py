@@ -32,6 +32,9 @@ class PoshmarkScraper(BaseScraper):
         self.context = None
     
     def init_browser(self):
+        self.run_browser_task(self._init_browser_impl)
+
+    def _init_browser_impl(self):
         if self.browser is None:
             self.playwright = sync_playwright().start()
             self.browser = self.playwright.chromium.launch(headless=True)
@@ -44,11 +47,18 @@ class PoshmarkScraper(BaseScraper):
     def get_page_content(self, url: str, wait_for_selector: str = None, wait_time: int = 3000) -> Optional[str]:
         self.rate_limit_wait()
         self.stats['requests_made'] += 1
-        
+
         try:
-            self.init_browser()
-            page = self.context.new_page()
-            
+            return self.run_browser_task(self._get_page_content_impl, url, wait_for_selector, wait_time)
+        except Exception as e:
+            self.logger.error(f"Failed to fetch page {url}: {e}")
+            return None
+
+    def _get_page_content_impl(self, url: str, wait_for_selector: str = None, wait_time: int = 3000) -> Optional[str]:
+        self._init_browser_impl()
+        page = self.context.new_page()
+
+        try:
             self.logger.debug(f"Navigating to: {url}")
             page.goto(url, wait_until='domcontentloaded', timeout=self.timeout * 1000)
             
@@ -66,11 +76,10 @@ class PoshmarkScraper(BaseScraper):
             self.logger.debug(f"Successfully fetched content from: {url}")
             return content
             
-        except Exception as e:
-            self.logger.error(f"Failed to fetch page {url}: {e}")
+        except Exception:
             if 'page' in locals():
                 page.close()
-            return None
+            raise
     
     def scrape_search(
         self,
@@ -448,10 +457,18 @@ class PoshmarkScraper(BaseScraper):
             return 0.0
     
     def close(self):
+        if self._browser_thread is not None:
+            self.run_browser_task(self._close_browser_impl)
+            self.shutdown_browser_thread()
+        super().close()
+
+    def _close_browser_impl(self):
         if self.context:
             self.context.close()
+            self.context = None
         if self.browser:
             self.browser.close()
+            self.browser = None
         if self.playwright:
             self.playwright.stop()
-        super().close()
+            self.playwright = None

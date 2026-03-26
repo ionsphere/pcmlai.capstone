@@ -1,10 +1,10 @@
 import argparse
 from pathlib import Path
+from typing import Sequence, Optional, Tuple
 import pandas as pd
 import numpy as np
 import json
 import matplotlib.pyplot as plt
-from typing import Tuple
 from sklearn.model_selection import train_test_split
 
 
@@ -253,7 +253,7 @@ def create_splits(
     print(f"Saved split metadata to {output_dir / 'split_metadata.json'}")
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(description='Prepare dataset for price classification')
     parser.add_argument('--features-dir', type=str, required=True,
                         help='Directory with extracted features')
@@ -267,7 +267,7 @@ def main():
     parser.add_argument('--n-bins', type=int, default=DEFAULT_BIN_COUNT,
                         help='Number of price bins')
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     
     features_dir = Path(args.features_dir)
     data_csv = Path(args.data_csv)

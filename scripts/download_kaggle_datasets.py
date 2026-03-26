@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Sequence, Optional
 
 # Setup logging
 logging.basicConfig(
@@ -94,7 +94,7 @@ def download_kaggle_dataset(
         return False
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(
         description="Download DeepFashion datasets from Kaggle",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -135,7 +135,7 @@ Examples:
         help="Set logging level",
     )
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     logging.getLogger().setLevel(getattr(logging, args.log_level))
     if not check_kaggle_credentials():
         sys.exit(1)

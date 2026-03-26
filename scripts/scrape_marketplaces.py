@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Sequence, Optional, List
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -87,7 +87,7 @@ def scrape_all_platforms(
     print(f"\nData saved to: {output_dir}")
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(
         description='Scrape fashion marketplace data',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -106,14 +106,12 @@ Examples:
   python scrape_marketplaces.py --query "t-shirt" --max-items 10 --all-platforms --rate-limit 1.0
         '''
     )
-    
     parser.add_argument(
         '--query',
         type=str,
         required=True,
         help='Search query (e.g., "vintage jeans", "leather jacket")'
     )
-    
     platform_group = parser.add_mutually_exclusive_group()
     platform_group.add_argument(
         '--platform',
@@ -126,53 +124,46 @@ Examples:
         action='store_true',
         help='Scrape all platforms'
     )
-    
     parser.add_argument(
         '--max-items',
         type=int,
         default=100,
         help='Maximum number of items to scrape per platform (default: 100)'
     )
-    
     parser.add_argument(
         '--output-dir',
         type=str,
         default='data/scraped',
         help='Output directory (default: data/scraped)'
     )
-    
     parser.add_argument(
         '--rate-limit',
         type=float,
         default=2.0,
         help='Seconds between requests (default: 2.0)'
     )
-    
     parser.add_argument(
         '--min-price',
         type=float,
         help='Minimum price filter'
     )
-    
     parser.add_argument(
         '--max-price',
         type=float,
         help='Maximum price filter'
     )
-    
     parser.add_argument(
         '--category',
         type=str,
         help='Category filter (platform-specific)'
     )
-    
     parser.add_argument(
         '--condition',
         type=str,
         help='Condition filter (e.g., "new", "like_new", "good")'
     )
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     
     if not args.platform and not args.all_platforms:
         parser.error('Must specify either --platform or --all-platforms')

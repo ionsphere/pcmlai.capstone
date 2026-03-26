@@ -2,6 +2,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from typing import Sequence, Optional
 import json
 import sys
 import time
@@ -122,7 +123,7 @@ def test_search(index: FAISSIndex, embeddings: np.ndarray, items_data: pd.DataFr
             print(f"{i}. Price={item['price']}, Similarity={item['similarity']:.4f}")
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(description="Build vector index from embeddings")
     parser.add_argument('--embeddings-dir', type=str, default='data/embeddings',
                         help='Directory containing embeddings and metadata')
@@ -149,7 +150,7 @@ def main():
     parser.add_argument('--skip-save', action='store_true',
                         help='Skip saving index (for testing)')
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     
     print("Build Vector Index")
     print(f"Configuration:")

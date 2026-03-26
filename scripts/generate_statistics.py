@@ -3,7 +3,7 @@
 import argparse
 import logging
 from pathlib import Path
-from typing import Dict, List
+from typing import Sequence, Optional, Dict, List
 
 import pandas as pd
 
@@ -186,11 +186,10 @@ class StatisticsGenerator:
         logger.info(f"Total metrics generated: {len(self.stats)}")
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(
         description="Generate statistics for processed DeepFashion datasets",
     )
-    
     parser.add_argument(
         "--processed-dir",
         type=Path,
@@ -204,7 +203,7 @@ def main():
         help="Output path for statistics CSV",
     )
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     
     if not args.processed_dir.exists():
         logger.error(f"Processed directory does not exist: {args.processed_dir}")

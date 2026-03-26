@@ -5,7 +5,7 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Sequence, Optional, Dict, List, Tuple
 from collections import defaultdict
 import random
 import hashlib
@@ -373,39 +373,34 @@ class DataSplitter:
         
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(description="Prepare notebook train/val/test splits")
     parser.add_argument(
         "--deepfashion",
         action="store_true",
         help="Split DeepFashion data"
     )
-    
     parser.add_argument(
         "--scraped",
         action="store_true",
         help="Split scraped marketplace data"
     )
-    
     parser.add_argument(
         "--all",
         action="store_true",
         help="Split both DeepFashion and scraped data"
     )
-    
     parser.add_argument(
         "--stratify",
         choices=["condition", "category", "price_range", "platform", "none"],
         default=DEFAULT_STRATIFY,
         help="Stratification key to use when splitting"
     )
-    
     parser.add_argument(
         "--clean",
         action="store_true",
         help="Clean existing splits before creating new ones"
     )
-    
     parser.add_argument(
         "--report",
         type=str,
@@ -413,7 +408,7 @@ def main():
         help="Path for the split report JSON"
     )
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if not any([args.deepfashion, args.scraped, args.all]):
         args.all = True

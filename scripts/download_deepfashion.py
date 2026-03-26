@@ -6,7 +6,8 @@ import sys
 import tarfile
 import zipfile
 import gdown
-rom pathlib import Path
+from pathlib import Path
+from typing import Sequence, Optional
 
 from tqdm import tqdm
 
@@ -68,7 +69,7 @@ class DeepFashionDownloader:
 
     def download_from_google_drive(self, subset: str = "all"):
         results = {}
-        for subset_name in self._subsets(subset):
+        for subset_name in self.subsets(subset):
             info = self.DATASET_INFO[subset_name]
             target_dir = self.output_dir / subset_name
             target_dir.mkdir(parents=True, exist_ok=True)
@@ -84,7 +85,7 @@ class DeepFashionDownloader:
 
     def verify_dataset(self, subset: str = "all"):
         results = {}
-        for subset_name in self._subsets(subset):
+        for subset_name in self.subsets(subset):
             info = self.DATASET_INFO[subset_name]
             found = []
             missing = []
@@ -126,7 +127,7 @@ class DeepFashionDownloader:
             "total_images": 0,
             "timestamp": str(Path.cwd()),
         }
-        for subset_name in self._subsets(subset):
+        for subset_name in self.subsets(subset):
             info = self.DATASET_INFO[subset_name]
             image_count = self.count_images(self.img_dir)
             subset_stats = {
@@ -161,7 +162,7 @@ class DeepFashionDownloader:
                 f.write("\n".join(image_list))
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(
         description="Download and organize DeepFashion dataset",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -179,7 +180,7 @@ Examples:
     parser.add_argument("--extract", action="store_true")
     parser.add_argument("--splits", action="store_true")
     parser.add_argument("--stats", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     downloader = DeepFashionDownloader(output_dir=args.output)
     if not any([args.instructions, args.download, args.verify, args.extract, args.splits, args.stats]):

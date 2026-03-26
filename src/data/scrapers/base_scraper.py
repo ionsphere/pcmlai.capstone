@@ -2,7 +2,12 @@ import time
 import hashlib
 import json
 import logging
+import asyncio
+import threading
+import queue
+import sys
 from abc import ABC, abstractmethod
+from concurrent.futures import Future
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
@@ -80,7 +85,7 @@ class BaseScraper(ABC):
         self.timeout = timeout
         self.last_request_time = 0
         
-        self.logger = logging.getLogger(self._class__.__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
         
         self.session = self.create_session(user_agent)
         
@@ -90,6 +95,9 @@ class BaseScraper(ABC):
             'requests_made': 0,
             'start_time': datetime.now().isoformat(),
         }
+        self.browser_tasks: Optional[queue.Queue] = None
+        self.browser_thread: Optional[threading.Thread] = None
+        self.browser_thread_id: Optional[int] = None
     
     def create_session(self, user_agent: Optional[str] = None) -> requests.Session:
         session = requests.Session()
@@ -218,7 +226,7 @@ class BaseScraper(ABC):
             all_stats = []
         
         all_stats.append({
-            'scraper': self._class__.__name__,
+            'scraper': self.__class__.__name__,
             **self.stats
         })
         
@@ -226,7 +234,80 @@ class BaseScraper(ABC):
             json.dump(all_stats, f, indent=2)
         
         self.logger.info(f"Statistics saved to: {stats_file}")
-    
+
+    def browser_worker_loop(self):
+        previous_policy = None
+        worker_loop = None
+        if sys.platform == "win32":
+            try:
+                previous_policy = asyncio.get_event_loop_policy()
+                asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+                worker_loop = asyncio.ProactorEventLoop()
+                asyncio.set_event_loop(worker_loop)
+            except Exception as exc:
+                self.logger.warning(f"Failed to prepare Proactor event loop for Playwright: {exc}")
+
+        self.browser_thread_id = threading.get_ident()
+        while True:
+            task = self.browser_tasks.get()
+            if task is None:
+                break
+
+            future, func, args, kwargs = task
+            if future.set_running_or_notify_cancel():
+                try:
+                    result = func(*args, **kwargs)
+                except Exception as exc:
+                    future.set_exception(exc)
+                else:
+                    future.set_result(result)
+
+        self.browser_thread_id = None
+        if worker_loop is not None:
+            try:
+                worker_loop.close()
+            except Exception:
+                pass
+            try:
+                asyncio.set_event_loop(None)
+            except Exception:
+                pass
+        if previous_policy is not None:
+            try:
+                asyncio.set_event_loop_policy(previous_policy)
+            except Exception:
+                pass
+
+    def ensure_browser_thread(self):
+        if self.browser_thread is not None:
+            return
+
+        self.browser_tasks = queue.Queue()
+        self.browser_thread = threading.Thread(
+            target=self.browser_worker_loop,
+            name=f"{self.__class__.__name__}Playwright",
+            daemon=True,
+        )
+        self.browser_thread.start()
+
+    def run_browser_task(self, func, *args, **kwargs):
+        if self.browser_thread_id == threading.get_ident():
+            return func(*args, **kwargs)
+
+        self.ensure_browser_thread()
+        future = Future()
+        self.browser_tasks.put((future, func, args, kwargs))
+        return future.result()
+
+    def shutdown_browser_thread(self):
+        if self.browser_thread is None or self.browser_tasks is None:
+            return
+
+        self.browser_tasks.put(None)
+        self.browser_thread.join(timeout=5)
+        self.browser_thread = None
+        self.browser_tasks = None
+
     @abstractmethod
     def scrape_search(
         self,

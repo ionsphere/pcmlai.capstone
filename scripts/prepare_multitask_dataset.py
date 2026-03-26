@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from typing import Dict
+from typing import Sequence, Optional, Dict
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -152,7 +152,7 @@ def save_splits(df: pd.DataFrame, output_dir: Path):
         json.dump(stats, f, indent=2)
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(description="Prepare multitask training dataset")
     parser.add_argument(
         '--deepfashion2-csv',
@@ -169,7 +169,7 @@ def main():
         default=DEFAULT_OUTPUT_DIR,
         help='Output directory for multitask CSV splits'
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     deepfashion2_csv = PROJECT_ROOT / args.deepfashion2_csv
     synthetic_root = PROJECT_ROOT / args.synthetic_root

@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 import numpy as np
-from typing import List, Optional
+from typing import Sequence, Optional, List
 import json
 from datetime import datetime
 import torch
@@ -17,51 +17,6 @@ from src.models.embeddings import (
     MultiModalEmbedding,
     EmbeddingPipeline,
 )
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description='Generate embeddings for similarity search')
-    parser.add_argument('--data-csv', type=str, default=None,
-                      help='Path to CSV file with image paths and text data')
-    parser.add_argument('--image-col', type=str, default='image_path',
-                      help='Column name for image paths')
-    parser.add_argument('--text-col', type=str, default='description',
-                      help='Column name for text data (can specify multiple with comma)')
-    parser.add_argument('--title-col', type=str, default='title',
-                      help='Column name for title (optional, will be combined with description)')
-    parser.add_argument('--vision-model', type=str, default=None,
-                      help='Path to trained vision model checkpoint')
-    parser.add_argument('--text-model', type=str, default='all-MiniLM-L6-v2',
-                      help='Sentence Transformer model name')
-    parser.add_argument('--mode', type=str, default='multimodal',
-                      choices=['vision', 'text', 'multimodal'],
-                      help='Embedding mode')
-    parser.add_argument('--fusion-method', type=str, default='concat',
-                      choices=['concat', 'weighted'],
-                      help='Method to fuse vision and text embeddings')
-    parser.add_argument('--reduce-dim', action='store_true',
-                      help='Apply dimensionality reduction')
-    parser.add_argument('--reduction-method', type=str, default='pca',
-                      choices=['pca', 'umap'],
-                      help='Dimensionality reduction method')
-    parser.add_argument('--target-dim', type=int, default=128,
-                      help='Target dimension after reduction')
-    parser.add_argument('--batch-size', type=int, default=32,
-                      help='Batch size for processing')
-    parser.add_argument('--normalize', action='store_true', default=True,
-                      help='Normalize embeddings (L2 norm)')
-    parser.add_argument('--max-samples', type=int, default=None,
-                      help='Maximum number of samples to process (for testing)')
-    parser.add_argument('--output-dir', type=str, required=True,
-                      help='Directory to save embeddings')
-    parser.add_argument('--device', type=str, default=None,
-                      help='Device to use (cuda/cpu)')
-    parser.add_argument('--mock', action='store_true',
-                      help='Generate mock data for testing')
-    parser.add_argument('--mock-samples', type=int, default=100,
-                      help='Number of mock samples to generate')
-    
-    return parser.parse_args()
 
 
 def generate_mock_data(num_samples: int, output_dir: str) -> str:
@@ -156,8 +111,49 @@ def prepare_data(df: pd.DataFrame, args) -> tuple:
     return images, texts
 
 
-def main():
-    args = parse_args()
+def main(argv: Optional[Sequence[str]] = None):
+    parser = argparse.ArgumentParser(description='Generate embeddings for similarity search')
+    parser.add_argument('--data-csv', type=str, default=None,
+                      help='Path to CSV file with image paths and text data')
+    parser.add_argument('--image-col', type=str, default='image_path',
+                      help='Column name for image paths')
+    parser.add_argument('--text-col', type=str, default='description',
+                      help='Column name for text data (can specify multiple with comma)')
+    parser.add_argument('--title-col', type=str, default='title',
+                      help='Column name for title (optional, will be combined with description)')
+    parser.add_argument('--vision-model', type=str, default=None,
+                      help='Path to trained vision model checkpoint')
+    parser.add_argument('--text-model', type=str, default='all-MiniLM-L6-v2',
+                      help='Sentence Transformer model name')
+    parser.add_argument('--mode', type=str, default='multimodal',
+                      choices=['vision', 'text', 'multimodal'],
+                      help='Embedding mode')
+    parser.add_argument('--fusion-method', type=str, default='concat',
+                      choices=['concat', 'weighted'],
+                      help='Method to fuse vision and text embeddings')
+    parser.add_argument('--reduce-dim', action='store_true',
+                      help='Apply dimensionality reduction')
+    parser.add_argument('--reduction-method', type=str, default='pca',
+                      choices=['pca', 'umap'],
+                      help='Dimensionality reduction method')
+    parser.add_argument('--target-dim', type=int, default=128,
+                      help='Target dimension after reduction')
+    parser.add_argument('--batch-size', type=int, default=32,
+                      help='Batch size for processing')
+    parser.add_argument('--normalize', action='store_true', default=True,
+                      help='Normalize embeddings (L2 norm)')
+    parser.add_argument('--max-samples', type=int, default=None,
+                      help='Maximum number of samples to process (for testing)')
+    parser.add_argument('--output-dir', type=str, required=True,
+                      help='Directory to save embeddings')
+    parser.add_argument('--device', type=str, default=None,
+                      help='Device to use (cuda/cpu)')
+    parser.add_argument('--mock', action='store_true',
+                      help='Generate mock data for testing')
+    parser.add_argument('--mock-samples', type=int, default=100,
+                      help='Number of mock samples to generate')
+    
+    args = parser.parse_args(argv)
     
     if not args.mock and args.data_csv is None:
         print("Error: Either --mock or --data-csv must be provided")

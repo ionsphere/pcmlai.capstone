@@ -2,12 +2,13 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from typing import Sequence, Optional
 
 
 sys.path.append(str(Path(__file__).parent.parent))
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(description="Start Clothing Price Predictor API")
     parser.add_argument('--host', type=str, default=os.getenv('API_HOST', '0.0.0.0'),
                         help='Host to bind to')
@@ -21,7 +22,7 @@ def main():
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='Logging level')
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     
     print("Clothing Price Predictor API")
     print(f"Starting server on {args.host}:{args.port}")

@@ -1,6 +1,7 @@
 import argparse
 import sys
 from pathlib import Path
+from typing import Sequence, Optional
 import json
 import numpy as np
 import pandas as pd
@@ -345,7 +346,7 @@ def save_results(result: Dict[str, Any], data: Dict[str, Any], output_dir: Path)
         )
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(description='Train Price Classification Model')
     parser.add_argument('--features-dir', type=str, default='data/price_classification',
                         help='Directory with prepared features')
@@ -371,7 +372,7 @@ def main():
     parser.add_argument('--verbose', action='store_true', default=True,
                         help='Verbose training output')
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     
     print("PRICE CLASSIFICATION MODEL TRAINING")
     print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")

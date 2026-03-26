@@ -77,3 +77,20 @@ During scraping, specific categories were selected to make sure queries to all s
 **Model**
 
 As a base model Logistic Regression shows 78.8% accuracy.
+
+## Training process
+
+### 1. Images
+
+As a first step images received synthetic condition reduction by adding streaks of black lines, discoloration, artificial spots. This was a primitive algorithm that may be improved to better target true wear and tear effects.
+![Synthetic condition][images/deconditioned_shorts.jpg]
+
+There were 2 target values for which separate models were trained: 1) cloth type, 2) condition.
+As image classification goes beyond the course material, I had search for common approaches and chose PyTorch (due to having worked with it at my workplace).
+
+**Cloth type**
+With PyTorch I had several hyperparameters to adjust: 1) optimizer selection, 2) learning rate.
+
+
+**Condition**
+For condition training I chose to introduce distortions and transformations to the images. I purposefully had different distortions on training set (random rotations, flips, color changes) while keeping validation set a bit more realistic with just resizes.

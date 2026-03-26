@@ -29,6 +29,9 @@ class ThredUpScraper(BaseScraper):
         self.context = None
     
     def init_browser(self):
+        self.run_browser_task(self._init_browser_impl)
+
+    def _init_browser_impl(self):
         if self.browser is None:
             self.playwright = sync_playwright().start()
             self.browser = self.playwright.chromium.launch(headless=True)
@@ -41,10 +44,17 @@ class ThredUpScraper(BaseScraper):
     def get_page_content(self, url: str, wait_for_selector: str = None, wait_time: int = 3000) -> Optional[str]:
         self.rate_limit_wait()
         self.stats['requests_made'] += 1
-    
-        self.init_browser()
+
+        try:
+            return self.run_browser_task(self._get_page_content_impl, url, wait_for_selector, wait_time)
+        except Exception as e:
+            self.logger.error(f"Failed to fetch page {url}: {e}")
+            return None
+
+    def _get_page_content_impl(self, url: str, wait_for_selector: str = None, wait_time: int = 3000) -> Optional[str]:
+        self._init_browser_impl()
         page = self.context.new_page()
-    
+
         try:
             self.logger.info(f"GET {url}")
             resp = page.goto(url, wait_until="domcontentloaded", timeout=self.timeout * 1000)
@@ -68,12 +78,13 @@ class ThredUpScraper(BaseScraper):
     
             page.close()
             return html
-    
-        except Exception as e:
-            self.logger.error(f"Failed to fetch page {url}: {e}")
-            try: page.close()
-            except: pass
-            return None
+
+        except Exception:
+            try:
+                page.close()
+            except Exception:
+                pass
+            raise
     
     def scrape_search(
         self,
@@ -439,10 +450,18 @@ class ThredUpScraper(BaseScraper):
             return 0.0
     
     def close(self):
+        if self._browser_thread is not None:
+            self.run_browser_task(self._close_browser_impl)
+            self.shutdown_browser_thread()
+        super().close()
+
+    def _close_browser_impl(self):
         if self.context:
             self.context.close()
+            self.context = None
         if self.browser:
             self.browser.close()
+            self.browser = None
         if self.playwright:
             self.playwright.stop()
-        super().close()
+            self.playwright = None

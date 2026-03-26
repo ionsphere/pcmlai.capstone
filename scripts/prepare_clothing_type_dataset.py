@@ -3,7 +3,7 @@ import sys
 import json
 import argparse
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Sequence, Optional, Dict, List, Tuple
 from collections import Counter, defaultdict
 import shutil
 
@@ -479,7 +479,7 @@ def filter_missing_images(df: pd.DataFrame, image_root: Path) -> pd.DataFrame:
     return df.loc[exists_mask].copy()
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(
         description="Prepare clothing type classification dataset"
     )
@@ -536,7 +536,7 @@ def main():
         help='Verify existing dataset only'
     )
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     
     deepfashion_root = Path(args.deepfashion_root)
     output_dir = Path(args.output_dir)

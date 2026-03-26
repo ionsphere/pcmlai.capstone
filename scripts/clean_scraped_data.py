@@ -2,7 +2,7 @@ import argparse
 import json
 import hashlib
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Sequence, Optional, List, Dict, Any
 from collections import defaultdict
 import pandas as pd
 from tqdm import tqdm
@@ -468,30 +468,27 @@ def save_cleaned_data(df: pd.DataFrame, output_dir: Path):
             print(f"{col}: {completeness:.1f}%")
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(description='Clean and deduplicate scraped marketplace data')
-    
     parser.add_argument(
         '--input-dir',
         type=str,
         default='data/scraped',
         help='Input directory with scraped data'
     )
-    
     parser.add_argument(
         '--output-dir',
         type=str,
         default='data/scraped/cleaned',
         help='Output directory for cleaned data'
     )
-    
     parser.add_argument(
         '--remove-no-images',
         action='store_true',
         help='Remove items without valid image URLs'
     )
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     
     input_dir = Path(args.input_dir)
     output_dir = Path(args.output_dir)

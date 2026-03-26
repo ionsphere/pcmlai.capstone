@@ -4,7 +4,7 @@ import json
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Dict
+from typing import Sequence, Optional, Dict
 from sklearn.model_selection import train_test_split
 from PIL import Image
 import random
@@ -201,11 +201,10 @@ def prepare_deepfashion_condition_dataset(
     return save_condition_dataset(pd.DataFrame(data_records), output_path)
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(
         description="Prepare condition assessment training dataset"
     )
-    
     parser.add_argument(
         '--deepfashion-dir',
         type=str,
@@ -224,14 +223,13 @@ def main():
         default=DEFAULT_OUTPUT_DIR,
         help='Output directory for prepared dataset'
     )
-    
     parser.add_argument(
         '--mock',
         action='store_true',
         help='Create mock dataset for testing'
     )
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     print("CONDITION ASSESSMENT DATASET PREPARATION")
     if args.mock:
         splits = create_mock_condition_dataset(args.output_dir)

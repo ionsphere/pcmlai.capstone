@@ -5,7 +5,7 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Sequence, Optional, Dict, List, Tuple
 
 import numpy as np
 import torch
@@ -622,7 +622,7 @@ def create_mock_dataset(output_dir: Path, num_samples: int = 100):
     logger.info(f"Dataset saved to {output_dir}")
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(description="Multi-Task Model Training")
     parser.add_argument(
         '--train-csv',
@@ -657,7 +657,7 @@ def main():
         help='Number of mock samples to create'
     )
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.quick_test:
         logger.info("Running quick test mode...")
         mock_dir = Path('data/processed/multitask_mock')

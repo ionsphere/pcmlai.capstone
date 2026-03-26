@@ -29,6 +29,9 @@ class DepopScraper(BaseScraper):
         self.context = None
     
     def init_browser(self):
+        self.run_browser_task(self._init_browser_impl)
+
+    def _init_browser_impl(self):
         if self.browser is None:
             self.playwright = sync_playwright().start()
             self.browser = self.playwright.chromium.launch(
@@ -52,35 +55,35 @@ class DepopScraper(BaseScraper):
     def get_page_content(self, url: str, wait_for_selector: str = None, wait_time: int = 3000) -> Optional[str]:
         self.rate_limit_wait()
         self.stats['requests_made'] += 1
-        
+
         try:
-            self.init_browser()
-            page = self.context.new_page()
-            self.logger.debug(f"Navigating to: {url}")
-            response = page.goto(url, wait_until='domcontentloaded', timeout=60000)
-            if response and response.status == 403:
-                self.logger.error(f"Access forbidden (403) for URL: {url}")
-                page.close()
-                return None
-            
-            if wait_for_selector:
-                try:
-                    page.wait_for_selector(wait_for_selector, timeout=wait_time)
-                except PlaywrightTimeoutError:
-                    self.logger.warning(f"Timeout waiting for selector: {wait_for_selector}")
-            else:
-                page.wait_for_timeout(wait_time)
-            
-            content = page.content()
-            page.close()
-            self.logger.debug(f"Successfully fetched content from: {url}")
-            return content
-            
+            return self.run_browser_task(self._get_page_content_impl, url, wait_for_selector, wait_time)
         except Exception as e:
             self.logger.error(f"Failed to fetch page {url}: {e}")
-            if 'page' in locals():
-                page.close()
             return None
+
+    def _get_page_content_impl(self, url: str, wait_for_selector: str = None, wait_time: int = 3000) -> Optional[str]:
+        self._init_browser_impl()
+        page = self.context.new_page()
+        self.logger.debug(f"Navigating to: {url}")
+        response = page.goto(url, wait_until='domcontentloaded', timeout=60000)
+        if response and response.status == 403:
+            self.logger.error(f"Access forbidden (403) for URL: {url}")
+            page.close()
+            return None
+        
+        if wait_for_selector:
+            try:
+                page.wait_for_selector(wait_for_selector, timeout=wait_time)
+            except PlaywrightTimeoutError:
+                self.logger.warning(f"Timeout waiting for selector: {wait_for_selector}")
+        else:
+            page.wait_for_timeout(wait_time)
+        
+        content = page.content()
+        page.close()
+        self.logger.debug(f"Successfully fetched content from: {url}")
+        return content
     
     def scrape_search(
         self,
@@ -156,93 +159,111 @@ class DepopScraper(BaseScraper):
         max_price: Optional[float] = None
     ) -> List[Dict[str, Any]]:
         try:
-            from urllib.parse import urlencode
-            api_url = f"{self.API_BASE}/search/products/"
-            params = {
-                'q': query,
-                'offset': offset,
-                'limit': limit,
-            }
-            
-            if category:
-                params['categoryId'] = category
-            
-            if min_price is not None:
-                params['priceMin'] = int(min_price * 100)
-            
-            if max_price is not None:
-                params['priceMax'] = int(max_price * 100)
-            
-            url = f"{api_url}?{urlencode(params)}"
-            self.init_browser()
-            page = self.context.new_page()
-            
-            try:
-                response = page.goto(url, wait_until='domcontentloaded', timeout=60000)
-                
-                if response and response.ok:
-                    content = page.content()
-                    page.close()
-                    soup = BeautifulSoup(content, 'html.parser')
-                    json_text = soup.get_text()
-                    try:
-                        data = json.loads(json_text)
-                        products = data.get('products', [])
-                        return products
-                    except json.JSONDecodeError:
-                        self.logger.error("Failed to parse API JSON response")
-                        return []
-                else:
-                    page.close()
-                    return []
-                    
-            except Exception as e:
-                self.logger.error(f"API request failed: {e}")
-                page.close()
-                return []
-            
+            return self.run_browser_task(
+                self._scrape_via_api_impl,
+                query,
+                offset,
+                limit,
+                category,
+                min_price,
+                max_price,
+            )
         except Exception as e:
             self.logger.error(f"API scraping failed: {e}")
             return []
+
+    def _scrape_via_api_impl(
+        self,
+        query: str,
+        offset: int = 0,
+        limit: int = 20,
+        category: Optional[str] = None,
+        min_price: Optional[float] = None,
+        max_price: Optional[float] = None
+    ) -> List[Dict[str, Any]]:
+        from urllib.parse import urlencode
+
+        api_url = f"{self.API_BASE}/search/products/"
+        params = {
+            'q': query,
+            'offset': offset,
+            'limit': limit,
+        }
+        
+        if category:
+            params['categoryId'] = category
+        
+        if min_price is not None:
+            params['priceMin'] = int(min_price * 100)
+        
+        if max_price is not None:
+            params['priceMax'] = int(max_price * 100)
+        
+        url = f"{api_url}?{urlencode(params)}"
+        self._init_browser_impl()
+        page = self.context.new_page()
+        
+        try:
+            response = page.goto(url, wait_until='domcontentloaded', timeout=60000)
+            
+            if response and response.ok:
+                content = page.content()
+                page.close()
+                soup = BeautifulSoup(content, 'html.parser')
+                json_text = soup.get_text()
+                try:
+                    data = json.loads(json_text)
+                    return data.get('products', [])
+                except json.JSONDecodeError:
+                    self.logger.error("Failed to parse API JSON response")
+                    return []
+
+            page.close()
+            return []
+        except Exception:
+            page.close()
+            raise
     
     def scrape_via_web(self, query: str, max_items: int) -> List[ScrapedItem]:
-        items = []
         try:
-            search_url = f"{self.SEARCH_URL}/?q={quote(query)}"
-            self.init_browser()
-            page = self.context.new_page()
-            try:
-                page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
-                self.logger.info("Waiting for products to load (10 seconds)...")
-                page.wait_for_timeout(10000)
-                page.evaluate("window.scrollTo(0, 800)")
-                page.wait_for_timeout(2000)
-                product_links = page.locator('a[href*="/products/"]').all()
-                self.logger.info(f"Found {len(product_links)} product links")
-                for i in range(min(max_items, len(product_links))):
-                    try:
-                        href = product_links[i].get_attribute('href')
-                        if href:
-                            if href.startswith('/'):
-                                product_url = self.BASE_URL + href
-                            else:
-                                product_url = href
-                            
-                            item = self.scrape_item(product_url)
-                            if item:
-                                items.append(item)
-                                if len(items) % 5 == 0:
-                                    self.logger.info(f"Scraped {len(items)} items from web...")
-                    except Exception as e:
-                        self.logger.debug(f"Failed to scrape product {i}: {e}")
-                        continue
-                        
-            finally:
-                page.close()
-            
+            return self.run_browser_task(self._scrape_via_web_impl, query, max_items)
         except Exception as e:
             self.logger.error(f"Web scraping failed: {e}")
-        
+            return []
+
+    def _scrape_via_web_impl(self, query: str, max_items: int) -> List[ScrapedItem]:
+        items = []
+        search_url = f"{self.SEARCH_URL}/?q={quote(query)}"
+        self._init_browser_impl()
+        page = self.context.new_page()
+        try:
+            page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
+            self.logger.info("Waiting for products to load (10 seconds)...")
+            page.wait_for_timeout(10000)
+            page.evaluate("window.scrollTo(0, 800)")
+            page.wait_for_timeout(2000)
+            product_links = page.locator('a[href*="/products/"]').all()
+            self.logger.info(f"Found {len(product_links)} product links")
+            for i in range(min(max_items, len(product_links))):
+                try:
+                    href = product_links[i].get_attribute('href')
+                    if href:
+                        if href.startswith('/'):
+                            product_url = self.BASE_URL + href
+                        else:
+                            product_url = href
+                        
+                        item = self.scrape_item(product_url)
+                        if item:
+                            items.append(item)
+                            if len(items) % 5 == 0:
+                                self.logger.info(f"Scraped {len(items)} items from web...")
+                except Exception as e:
+                    self.logger.debug(f"Failed to scrape product {i}: {e}")
+                    continue
+        finally:
+            page.close()
+
         return items
     
     def parse_search_results(self, html: str) -> List[Dict[str, Any]]:
@@ -594,25 +615,28 @@ class DepopScraper(BaseScraper):
             return None
 
     def get_item_fields_with_playwright(self, url: str) -> Optional[dict]:
-        self.init_browser()
+        return self.run_browser_task(self._get_item_fields_with_playwright_impl, url)
+
+    def _get_item_fields_with_playwright_impl(self, url: str) -> Optional[dict]:
+        self._init_browser_impl()
         page = self.context.new_page()
         try:
-            resp = page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
-    
+
             title = page.locator("h1").first.inner_text(timeout=5000).strip()
-    
+
             body_text = page.locator("body").inner_text(timeout=5000)
             m_price = re.search(r"(\$||)\s?(\d+(?:\.\d{2})?)", body_text)
             price = float(m_price.group(2)) if m_price else 0.0
             currency = "USD" if m_price and m_price.group(1) == "$" else ("GBP" if m_price and m_price.group(1) == "" else ("EUR" if m_price and m_price.group(1) == "" else "USD"))
-    
+
             m_size = re.search(r"\bSize\s+(\w+)", body_text)
             size = m_size.group(1).strip() if m_size else None
-    
+
             m_cond = re.search(r"\b(Brand new|Like new|Good condition|Fair condition|Poor condition|Good|Fair|Poor)\b", body_text, re.IGNORECASE)
             condition = m_cond.group(1).strip().title() if m_cond else None
-    
+
             return {
                 "title": title,
                 "price": price,
@@ -658,10 +682,18 @@ class DepopScraper(BaseScraper):
             return 0.0, 'USD'
     
     def close(self):
+        if self._browser_thread is not None:
+            self.run_browser_task(self._close_browser_impl)
+            self.shutdown_browser_thread()
+        super().close()
+
+    def _close_browser_impl(self):
         if self.context:
             self.context.close()
+            self.context = None
         if self.browser:
             self.browser.close()
+            self.browser = None
         if self.playwright:
             self.playwright.stop()
-        super().close()
+            self.playwright = None

@@ -4,7 +4,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Sequence, Optional, Dict, List, Tuple
 
 import pandas as pd
 import yaml
@@ -255,11 +255,10 @@ class DeepFashionProcessor:
         return None
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(
         description="Process DeepFashion datasets to CSV format",
     )
-    
     parser.add_argument(
         "--input",
         type=Path,
@@ -279,7 +278,7 @@ def main():
         help="Configuration file path",
     )
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if not args.input.exists():
         logger.error(f"Input directory does not exist: {args.input}")
         return 1

@@ -2,7 +2,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Sequence, Optional
 
 import numpy as np
 import pandas as pd
@@ -166,7 +166,7 @@ def extract_features_from_dataset(
     print(output_dir)
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(description="Extract features for price classification")
     parser.add_argument("--data-csv", required=True)
     parser.add_argument("--vision-model")
@@ -175,7 +175,7 @@ def main():
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--no-vision", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     data_csv = Path(args.data_csv)
     if not data_csv.exists():
