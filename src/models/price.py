@@ -1,5 +1,3 @@
-"""Price feature extraction and classification."""
-
 import torch
 import torch.nn as nn
 import numpy as np
@@ -45,7 +43,6 @@ class FeatureExtractor:
 
     @staticmethod
     def condition_label_from_score(condition_score: float) -> str:
-        """Map condition score to the categorical label used by the price model."""
         if condition_score >= 9:
             return 'like_new'
         if condition_score >= 6:
@@ -190,7 +187,6 @@ class FeatureExtractor:
         data: Union[List[Dict[str, Any]], Dict[str, Any], pd.DataFrame],
         vision_embeddings: Optional[np.ndarray] = None
     ) -> np.ndarray:
-        """Transform inference records into the feature matrix expected by the price model."""
         if isinstance(data, list):
             data = pd.DataFrame(data)
         elif isinstance(data, dict):
@@ -218,7 +214,6 @@ class FeatureExtractor:
         return features
     
     def save(self, path: Union[str, Path]):
-        """Save feature extractor state."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -238,7 +233,6 @@ class FeatureExtractor:
     
     @classmethod
     def load(cls, path: Union[str, Path]):
-        """Load feature extractor state."""
         with open(path, 'rb') as f:
             state = pickle.load(f)
 
@@ -273,13 +267,6 @@ class PriceRangeBinner:
         self.labels = {}
     
     def fit(self, prices: np.ndarray, categories: Optional[np.ndarray] = None):
-        """
-        Fit binning strategy on training data
-        
-        Args:
-            prices: Array of prices
-            categories: Optional array of categories (for category-specific bins)
-        """
         if self.strategy == 'custom':
             if self.custom_bins is None:
                 raise ValueError("Custom bins must be provided for 'custom' strategy")
@@ -290,23 +277,19 @@ class PriceRangeBinner:
             ]
             return
         
-        # Determine categories to process
         if self.category_specific and categories is not None:
             unique_cats = np.unique(categories)
         else:
             unique_cats = ['global']
             categories = np.array(['global'] * len(prices))
         
-        # Fit bins for each category
         for cat in unique_cats:
             cat_prices = prices[categories == cat] if cat != 'global' else prices
             
             if self.strategy == 'quantile':
-                # Quantile-based bins
                 quantiles = np.linspace(0, 1, self.n_bins + 1)
                 bins = np.quantile(cat_prices, quantiles)
             elif self.strategy == 'uniform':
-                # Uniform-width bins
                 bins = np.linspace(cat_prices.min(), cat_prices.max(), self.n_bins + 1)
             else:
                 raise ValueError(f"Unknown strategy: {self.strategy}")
@@ -322,31 +305,18 @@ class PriceRangeBinner:
         prices: np.ndarray,
         categories: Optional[np.ndarray] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Transform prices to bin indices and labels
-        
-        Args:
-            prices: Array of prices
-            categories: Optional array of categories
-            
-        Returns:
-            bin_indices: Array of bin indices (0 to n_bins-1)
-            bin_labels: Array of bin label strings
-        """
         if not self.bins:
             raise ValueError("Binner not fitted. Call fit() first.")
         
         bin_indices = np.zeros(len(prices), dtype=int)
         bin_labels = np.array([''] * len(prices), dtype=object)
         
-        # Determine categories
         if self.category_specific and categories is not None:
             unique_cats = np.unique(categories)
         else:
             unique_cats = ['global']
             categories = np.array(['global'] * len(prices))
         
-        # Bin each category
         for cat in unique_cats:
             mask = categories == cat
             cat_prices = prices[mask]
@@ -354,9 +324,8 @@ class PriceRangeBinner:
             bins = self.bins.get(cat, self.bins['global'])
             labels = self.labels.get(cat, self.labels['global'])
             
-            # Digitize prices (bins are edges, so we get indices 1 to n_bins)
             indices = np.digitize(cat_prices, bins) - 1
-            indices = np.clip(indices, 0, len(labels) - 1)  # Handle edge cases
+            indices = np.clip(indices, 0, len(labels) - 1)
             
             bin_indices[mask] = indices
             bin_labels[mask] = [labels[i] for i in indices]
@@ -368,12 +337,10 @@ class PriceRangeBinner:
         prices: np.ndarray,
         categories: Optional[np.ndarray] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Fit and transform in one step"""
         self.fit(prices, categories)
         return self.transform(prices, categories)
     
     def get_bin_info(self) -> Dict[str, Any]:
-        """Get information about bins"""
         return {
             'strategy': self.strategy,
             'n_bins': self.n_bins,
@@ -384,22 +351,12 @@ class PriceRangeBinner:
 
 
 class PriceClassifier:
-    """Price range classification model with multiple algorithm support"""
-    
     def __init__(
         self,
         model_type: str = 'xgboost',
         n_classes: int = 5,
         **model_params
     ):
-        """
-        Initialize price classifier
-        
-        Args:
-            model_type: Type of model ('xgboost', 'lightgbm', 'random_forest', 'mlp', 'ensemble')
-            n_classes: Number of price range classes
-            **model_params: Model-specific parameters
-        """
         self.model_type = model_type
         self.n_classes = n_classes
         self.model_params = model_params
@@ -409,7 +366,6 @@ class PriceClassifier:
         self._initialize_model()
     
     def _initialize_model(self):
-        """Initialize model based on type"""
         if self.model_type == 'xgboost':
             self.model = xgb.XGBClassifier(
                 objective='multi:softmax',
@@ -426,10 +382,8 @@ class PriceClassifier:
         elif self.model_type == 'random_forest':
             self.model = RandomForestClassifier(**self.model_params)
         elif self.model_type == 'mlp':
-            # Will be implemented as PyTorch model
             raise NotImplementedError("MLP model coming soon")
         elif self.model_type == 'ensemble':
-            # Ensemble of multiple models
             raise NotImplementedError("Ensemble model coming soon")
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
@@ -442,18 +396,7 @@ class PriceClassifier:
         y_val: Optional[np.ndarray] = None,
         verbose: bool = True
     ):
-        """
-        Train price classifier
-        
-        Args:
-            X_train: Training features
-            y_train: Training labels (bin indices)
-            X_val: Validation features (optional)
-            y_val: Validation labels (optional)
-            verbose: Whether to print training progress
-        """
         if self.model_type in ['xgboost', 'lightgbm']:
-            # Use eval set for early stopping
             if X_val is not None and y_val is not None:
                 fit_kwargs = {
                     'eval_set': [(X_val, y_val)]
@@ -467,16 +410,13 @@ class PriceClassifier:
         else:
             self.model.fit(X_train, y_train)
         
-        # Extract feature importance
         if hasattr(self.model, 'feature_importances_'):
             self.feature_importance = self.model.feature_importances_
     
     def predict(self, X: np.ndarray) -> np.ndarray:
-        """Predict price range classes"""
         return self.model.predict(X)
     
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        """Predict class probabilities"""
         return self.model.predict_proba(X)
     
     def evaluate(
@@ -485,29 +425,15 @@ class PriceClassifier:
         y: np.ndarray,
         class_names: Optional[List[str]] = None
     ) -> Dict[str, Any]:
-        """
-        Evaluate model performance
-        
-        Args:
-            X: Features
-            y: True labels
-            class_names: Optional class names for report
-            
-        Returns:
-            metrics: Dictionary of evaluation metrics
-        """
         y_pred = self.predict(X)
         y_proba = self.predict_proba(X)
         
-        # Calculate metrics
         accuracy = accuracy_score(y, y_pred)
         f1_weighted = f1_score(y, y_pred, average='weighted')
         f1_macro = f1_score(y, y_pred, average='macro')
         
-        # Within +/-1 bracket accuracy
         within_1 = np.mean(np.abs(y - y_pred) <= 1)
         
-        # Classification report
         report = classification_report(
             y, y_pred,
             target_names=class_names,
@@ -515,7 +441,6 @@ class PriceClassifier:
             zero_division=0
         )
         
-        # Confusion matrix
         cm = confusion_matrix(y, y_pred)
         
         return {
@@ -534,16 +459,6 @@ class PriceClassifier:
         feature_names: Optional[List[str]] = None,
         top_k: int = 20
     ) -> pd.DataFrame:
-        """
-        Get feature importance
-        
-        Args:
-            feature_names: List of feature names
-            top_k: Number of top features to return
-            
-        Returns:
-            importance_df: DataFrame with feature importances
-        """
         if self.feature_importance is None:
             raise ValueError("Model not trained or doesn't support feature importance")
         
@@ -558,7 +473,6 @@ class PriceClassifier:
         return importance_df
     
     def save(self, path: Union[str, Path]):
-        """Save model"""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -574,7 +488,6 @@ class PriceClassifier:
             with open(path, 'wb') as f:
                 pickle.dump(self.model, f)
         
-        # Save metadata
         metadata = {
             'model_type': self.model_type,
             'n_classes': self.n_classes,
@@ -587,10 +500,8 @@ class PriceClassifier:
     
     @classmethod
     def load(cls, path: Union[str, Path]):
-        """Load model."""
         path = Path(path)
         
-        # Load metadata
         with open(path.with_suffix('.json'), 'r') as f:
             metadata = json.load(f)
 
@@ -604,7 +515,6 @@ class PriceClassifier:
             if metadata['feature_importance'] else None
         )
         
-        # Load model
         if classifier.model_type == 'xgboost':
             classifier.model = xgb.XGBClassifier()
             classifier.model.load_model(str(path))
@@ -619,20 +529,3 @@ class PriceClassifier:
                 classifier.model = pickle.load(f)
 
         return classifier
-
-
-if __name__ == '__main__':
-    print("Price Classification Model - Feature Engineering Module")
-    print("=" * 60)
-    print("\nComponents:")
-    print("  1. FeatureExtractor - Extract vision, text, and categorical features")
-    print("  2. PriceRangeBinner - Define and manage price range bins")
-    print("  3. PriceClassifier - Train and evaluate price classification models")
-    print("\nSupported Models:")
-    print("  - XGBoost")
-    print("  - LightGBM")
-    print("  - Random Forest")
-    print("  - Neural Network (MLP) - Coming soon")
-    print("  - Ensemble - Coming soon")
-    print("\nUsage:")
-    print("  from src.models.price import FeatureExtractor, PriceRangeBinner, PriceClassifier")

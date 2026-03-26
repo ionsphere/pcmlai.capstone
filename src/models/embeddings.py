@@ -9,12 +9,10 @@ from tqdm import tqdm
 from sentence_transformers import SentenceTransformer
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-import umap
 import pickle
 
 
 def get_config_value(config: dict, paths, default=None):
-    """Return the first matching nested config value from a list of key paths."""
     for path in paths:
         value = config
         found = True
@@ -50,11 +48,9 @@ class VisionEmbeddingExtractor:
         self.model.to(self.device)
         self.model.eval()
         
-        # Get embedding dimension
         self.embedding_dim = self._get_embedding_dim()
         
     def _load_model(self, model_path: str) -> nn.Module:
-        """Load trained model from checkpoint."""
         from .vision import MultiTaskClothingModel
         
         checkpoint = torch.load(model_path, map_location=self.device)
@@ -205,7 +201,6 @@ class MultiModalEmbedding:
                 dim += self.text_extractor.embedding_dim
             return dim
         elif self.fusion_method == 'weighted':
-            # Must have same dimension
             if self.vision_extractor and self.text_extractor:
                 assert self.vision_extractor.embedding_dim == self.text_extractor.embedding_dim, \
                     "Vision and text embeddings must have same dimension for 'weighted' fusion"
@@ -264,20 +259,11 @@ class DimensionalityReducer:
         self.n_components = n_components
         self.random_state = random_state
         
-        if method == 'pca':
-            self.reducer = PCA(
-                n_components=n_components,
-                random_state=random_state,
-                **kwargs
-            )
-        elif method == 'umap':
-            self.reducer = umap.UMAP(
-                n_components=n_components,
-                random_state=random_state,
-                **kwargs
-            )
-        else:
-            raise ValueError(f"Unknown method: {method}. Use 'pca' or 'umap'.")
+        self.reducer = PCA(
+            n_components=n_components,
+            random_state=random_state,
+            **kwargs
+        )
         
         self.is_fitted = False
     
@@ -287,7 +273,6 @@ class DimensionalityReducer:
         return self
     
     def transform(self, embeddings: np.ndarray) -> np.ndarray:
-        """Transform embeddings to reduced dimension."""
         if not self.is_fitted:
             raise ValueError("Reducer not fitted. Call fit() first.")
         
@@ -367,52 +352,30 @@ class EmbeddingPipeline:
         return embeddings
     
     def save(self, output_dir: str, embeddings: np.ndarray, metadata: Dict):
-        """
-        Save embeddings and metadata.
-        
-        Args:
-            output_dir: Directory to save to
-            embeddings: Embeddings array
-            metadata: Metadata dictionary
-        """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save embeddings
         embeddings_path = output_dir / 'embeddings.npy'
         np.save(embeddings_path, embeddings)
         print(f"Embeddings saved to {embeddings_path}")
         
-        # Save metadata
         metadata_path = output_dir / 'metadata.json'
         with open(metadata_path, 'w') as f:
             json.dump(metadata, f, indent=2)
         print(f"Metadata saved to {metadata_path}")
         
-        # Save reducer if used
         if self.reducer is not None and self.reducer.is_fitted:
             reducer_path = output_dir / f'{self.reducer.method}_reducer.pkl'
             self.reducer.save(str(reducer_path))
     
     @staticmethod
     def load(embeddings_dir: str) -> Tuple[np.ndarray, Dict]:
-        """
-        Load saved embeddings and metadata.
-        
-        Args:
-            embeddings_dir: Directory containing saved embeddings
-        
-        Returns:
-            Tuple of (embeddings, metadata)
-        """
         embeddings_dir = Path(embeddings_dir)
         
-        # Load embeddings
         embeddings_path = embeddings_dir / 'embeddings.npy'
         embeddings = np.load(embeddings_path)
         print(f"Loaded embeddings from {embeddings_path}: {embeddings.shape}")
         
-        # Load metadata
         metadata_path = embeddings_dir / 'metadata.json'
         with open(metadata_path, 'r') as f:
             metadata = json.load(f)

@@ -1,10 +1,3 @@
-"""
-Vector Index Module
-
-Provides vector indexing capabilities using FAISS and other backends.
-Supports efficient similarity search for large-scale clothing item databases.
-"""
-
 import numpy as np
 import faiss
 from typing import Dict, List, Optional, Tuple, Union
@@ -15,38 +8,25 @@ from abc import ABC, abstractmethod
 
 
 class VectorIndex(ABC):
-    """Abstract base class for vector indices."""
     
     @abstractmethod
     def build(self, embeddings: np.ndarray, metadata: Optional[List[Dict]] = None):
-        """Build index from embeddings."""
         pass
     
     @abstractmethod
     def search(self, query: np.ndarray, k: int = 5) -> Tuple[np.ndarray, np.ndarray]:
-        """Search for k nearest neighbors."""
         pass
     
     @abstractmethod
     def save(self, path: str):
-        """Save index to disk."""
         pass
     
     @abstractmethod
     def load(self, path: str):
-        """Load index from disk."""
         pass
 
 
 class FAISSIndex(VectorIndex):
-    """
-    FAISS-based vector index for fast similarity search.
-    
-    Supports multiple index types:
-    - Flat (exact search, best quality, slower for large datasets)
-    - IVF (inverted file index, good balance)
-    - HNSW (hierarchical navigable small world, fast approximate search)
-    """
     
     def __init__(
         self,
@@ -58,18 +38,6 @@ class FAISSIndex(VectorIndex):
         hnsw_m: int = 32,  # Number of connections for HNSW
         use_gpu: bool = False,
     ):
-        """
-        Initialize FAISS index.
-        
-        Args:
-            index_type: Type of index ('flat', 'ivf', 'hnsw')
-            dimension: Embedding dimension (required for building index)
-            metric: Distance metric ('cosine' or 'l2')
-            nlist: Number of clusters for IVF index
-            nprobe: Number of clusters to search in IVF
-            hnsw_m: Number of connections per layer for HNSW
-            use_gpu: Whether to use GPU for indexing (requires faiss-gpu)
-        """
         self.index_type = index_type.lower()
         self.dimension = dimension
         self.metric = metric
@@ -88,14 +56,6 @@ class FAISSIndex(VectorIndex):
             raise ValueError(f"Invalid index_type: {index_type}. Must be one of {valid_types}")
     
     def build(self, embeddings: np.ndarray, metadata: Optional[List[Dict]] = None):
-        """
-        Build FAISS index from embeddings.
-        
-        Args:
-            embeddings: Numpy array of shape (n_items, dimension)
-            metadata: Optional list of metadata dicts for each item
-        """
-        # Validate embeddings
         if not isinstance(embeddings, np.ndarray):
             embeddings = np.array(embeddings)
         
@@ -142,7 +102,6 @@ class FAISSIndex(VectorIndex):
         print(f"Built {self.index_type.upper()} index with {self.n_items} items (dim={self.dimension})")
     
     def _create_flat_index(self) -> faiss.Index:
-        """Create flat (exact) index."""
         if self.metric == 'cosine':
             # Cosine similarity is equivalent to inner product after L2 normalization
             index = faiss.IndexFlatIP(self.dimension)
@@ -152,8 +111,6 @@ class FAISSIndex(VectorIndex):
         return index
     
     def _create_ivf_index(self, embeddings: np.ndarray) -> faiss.Index:
-        """Create IVF (inverted file) index with clustering."""
-        # Create quantizer (flat index for cluster centroids)
         if self.metric == 'cosine':
             quantizer = faiss.IndexFlatIP(self.dimension)
             index = faiss.IndexIVFFlat(quantizer, self.dimension, self.nlist, faiss.METRIC_INNER_PRODUCT)
@@ -169,7 +126,6 @@ class FAISSIndex(VectorIndex):
         return index
     
     def _create_hnsw_index(self) -> faiss.Index:
-        """Create HNSW (hierarchical navigable small world) index."""
         if self.metric == 'cosine':
             index = faiss.IndexHNSWFlat(self.dimension, self.hnsw_m, faiss.METRIC_INNER_PRODUCT)
         else:
@@ -187,19 +143,6 @@ class FAISSIndex(VectorIndex):
         k: int = 5,
         return_metadata: bool = True
     ) -> Union[Tuple[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray, List[Dict]]]:
-        """
-        Search for k nearest neighbors.
-        
-        Args:
-            query: Query embedding(s) of shape (dimension,) or (n_queries, dimension)
-            k: Number of neighbors to return
-            return_metadata: Whether to return metadata for results
-        
-        Returns:
-            distances: Array of distances of shape (n_queries, k)
-            indices: Array of indices of shape (n_queries, k)
-            metadata: List of metadata dicts (if return_metadata=True)
-        """
         if self.index is None:
             raise ValueError("Index not built. Call build() first.")
         
@@ -239,13 +182,6 @@ class FAISSIndex(VectorIndex):
             return distances, indices
     
     def add(self, embeddings: np.ndarray, metadata: Optional[List[Dict]] = None):
-        """
-        Add new embeddings to existing index.
-        
-        Args:
-            embeddings: Numpy array of shape (n_new_items, dimension)
-            metadata: Optional list of metadata dicts for new items
-        """
         if self.index is None:
             raise ValueError("Index not built. Call build() first.")
         
@@ -278,21 +214,9 @@ class FAISSIndex(VectorIndex):
         print(f"Added {n_new} items to index. Total: {self.n_items}")
     
     def remove(self, indices: List[int]):
-        """
-        Remove items from index by their indices.
-        
-        Note: FAISS doesn't support efficient removal. This creates a new index without the removed items.
-        For large-scale removals, consider rebuilding the entire index.
-        """
         raise NotImplementedError("FAISS doesn't support efficient removal. Rebuild index instead.")
     
     def save(self, path: str):
-        """
-        Save index to disk.
-        
-        Args:
-            path: Base path for saving (will create .index and .metadata files)
-        """
         if self.index is None:
             raise ValueError("Index not built. Call build() first.")
         
@@ -330,12 +254,6 @@ class FAISSIndex(VectorIndex):
         print(f"Saved index to {path}")
     
     def load(self, path: str):
-        """
-        Load index from disk.
-        
-        Args:
-            path: Base path for loading (without extension)
-        """
         path = Path(path)
         
         # Load config
@@ -375,7 +293,6 @@ class FAISSIndex(VectorIndex):
         print(f"Loaded {self.index_type.upper()} index with {self.n_items} items from {path}")
     
     def get_stats(self) -> Dict:
-        """Get index statistics."""
         if self.index is None:
             return {'status': 'not_built'}
         

@@ -1,5 +1,3 @@
-"""Inference pipeline."""
-
 import torch
 import numpy as np
 import pandas as pd
@@ -20,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 def get_config_value(config: dict, paths, default=None):
-    """Return the first matching nested config value from a list of key paths."""
     for path in paths:
         value = config
         found = True
@@ -67,7 +64,6 @@ class InferencePipeline:
         logger.info(f"Models loaded: {self.models_loaded}")
     
     def load_vision_model(self, model_path: str):
-        """Load vision model for clothing type and condition prediction."""
         checkpoint = torch.load(model_path, map_location=self.device)
         if 'config' in checkpoint:
             config = checkpoint['config']
@@ -108,7 +104,6 @@ class InferencePipeline:
         logger.info(f"Vision model loaded from {model_path}")
     
     def load_price_model(self, model_path: str, feature_extractor_path: str):
-        """Load price classifier and feature extractor."""
         from ..models.price import PriceClassifier, FeatureExtractor
         self.price_model = PriceClassifier.load(model_path)
         self.feature_extractor = FeatureExtractor.load(feature_extractor_path)
@@ -129,7 +124,6 @@ class InferencePipeline:
         logger.info(f"Feature extractor loaded from {feature_extractor_path}")
     
     def load_vector_index(self, index_path: str, items_data_path: str):
-        """Load vector index and items data."""
         from ..vector_search import FAISSIndex, SimilaritySearch
         self.vector_index = FAISSIndex()
         self.vector_index.load(index_path)
@@ -252,19 +246,6 @@ class InferencePipeline:
         price_range: Optional[Tuple[float, float]] = None,
         condition_range: Optional[Tuple[float, float]] = None,
     ) -> List[Dict[str, Any]]:
-        """
-        Find similar items using vector search.
-        
-        Args:
-            embedding: Query embedding
-            k: Number of similar items
-            category: Filter by category
-            price_range: Filter by price range
-            condition_range: Filter by condition range
-        
-        Returns:
-            List of similar items
-        """
         if not self.models_loaded['vector_index']:
             raise RuntimeError("Vector index not loaded")
         
@@ -289,17 +270,6 @@ class InferencePipeline:
         category: Optional[str] = None,
         k: int = 20,
     ) -> Dict[str, Any]:
-        """
-        Get pricing context from similar items.
-        
-        Args:
-            embedding: Query embedding
-            category: Filter by category
-            k: Number of similar items to analyze
-        
-        Returns:
-            Pricing context dictionary
-        """
         if not self.models_loaded['vector_index']:
             return None
         
@@ -327,22 +297,6 @@ class InferencePipeline:
         include_similar: bool = True,
         k_similar: int = 10,
     ) -> Dict[str, Any]:
-        """
-        Full end-to-end prediction pipeline.
-        
-        Args:
-            image_source: Image URL or base64 string
-            is_base64: Whether image_source is base64
-            title: Item title
-            description: Item description
-            brand: Brand name
-            category: Known category (optional, will predict if not provided)
-            include_similar: Whether to include similar items
-            k_similar: Number of similar items to return
-        
-        Returns:
-            Complete prediction results
-        """
         start_time = time.time()
         
         try:
@@ -403,7 +357,6 @@ class InferencePipeline:
             raise
     
     def get_status(self) -> Dict[str, Any]:
-        """Get pipeline status."""
         return {
             'models_loaded': self.models_loaded,
             'device': str(self.device),

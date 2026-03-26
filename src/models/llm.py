@@ -1,13 +1,3 @@
-"""
-LLM Integration Module
-
-Provides LLM inference capabilities for generating pricing explanations.
-Supports multiple backends:
-1. Ollama (local Llama 3 inference)
-2. OpenAI-compatible APIs
-3. Hugging Face Transformers (local inference)
-"""
-
 import json
 import requests
 from typing import Dict, List, Optional, Union
@@ -17,8 +7,6 @@ import time
 
 
 class LLMBackend(ABC):
-    """Abstract base class for LLM backends."""
-    
     @abstractmethod
     def generate(
         self,
@@ -27,45 +15,26 @@ class LLMBackend(ABC):
         temperature: float = 0.7,
         **kwargs
     ) -> str:
-        """Generate text from prompt."""
         pass
     
     @abstractmethod
     def is_available(self) -> bool:
-        """Check if backend is available."""
         pass
 
 
 class OllamaBackend(LLMBackend):
-    """
-    Ollama backend for local Llama 3 inference.
-    
-    Requires Ollama to be installed and running.
-    Install: https://ollama.ai/
-    Pull model: ollama pull llama3
-    """
-    
     def __init__(
         self,
         model_name: str = "llama3",
         base_url: str = "http://localhost:11434",
         request_timeout: int = 180,
     ):
-        """
-        Initialize Ollama backend.
-        
-        Args:
-            model_name: Ollama model name (e.g., 'llama3', 'llama3:70b')
-            base_url: Ollama API base URL
-            request_timeout: Request timeout in seconds for generation
-        """
         self.model_name = model_name
         self.base_url = base_url
         self.api_url = f"{base_url}/api/generate"
         self.request_timeout = request_timeout
     
     def list_models(self) -> List[str]:
-        """Return installed Ollama model names from the local API."""
         try:
             response = requests.get(f"{self.base_url}/api/tags", timeout=5)
             response.raise_for_status()
@@ -80,7 +49,6 @@ class OllamaBackend(LLMBackend):
             return []
     
     def resolve_model_name(self, requested_model: str) -> str:
-        """Resolve shorthand model names like 'llama3' to an installed Ollama tag."""
         available_models = self.list_models()
         if not available_models:
             return requested_model
@@ -112,7 +80,6 @@ class OllamaBackend(LLMBackend):
         temperature: float = 0.7,
         **kwargs
     ) -> str:
-        """Generate text using Ollama."""
         payload = {
             "model": self.resolve_model_name(self.model_name),
             "prompt": prompt,
@@ -140,37 +107,16 @@ class OllamaBackend(LLMBackend):
             raise RuntimeError(f"Ollama API error: {e}.{available_text}")
     
     def is_available(self) -> bool:
-        """Check if Ollama is running."""
         return len(self.list_models()) > 0
 
 
 class OpenAICompatibleBackend(LLMBackend):
-    """
-    OpenAI-compatible API backend.
-    
-    Works with:
-    - OpenAI API
-    - Azure OpenAI
-    - LocalAI
-    - vLLM
-    - Text Generation Inference (TGI)
-    - Any OpenAI-compatible endpoint
-    """
-    
     def __init__(
         self,
         api_key: str,
         base_url: str = "https://api.openai.com/v1",
         model_name: str = "gpt-3.5-turbo",
     ):
-        """
-        Initialize OpenAI-compatible backend.
-        
-        Args:
-            api_key: API key for authentication
-            base_url: API base URL
-            model_name: Model identifier
-        """
         self.api_key = api_key
         self.base_url = base_url
         self.model_name = model_name
@@ -183,7 +129,6 @@ class OpenAICompatibleBackend(LLMBackend):
         temperature: float = 0.7,
         **kwargs
     ) -> str:
-        """Generate text using OpenAI-compatible API."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -207,13 +152,11 @@ class OpenAICompatibleBackend(LLMBackend):
             raise RuntimeError(f"API error: {e}")
     
     def is_available(self) -> bool:
-        """Check if API is available."""
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
             }
-            # Try to list models as a health check
             response = requests.get(f"{self.base_url}/models", headers=headers, timeout=5)
             return response.status_code == 200
         except:
@@ -221,12 +164,6 @@ class OpenAICompatibleBackend(LLMBackend):
 
 
 class TransformersBackend(LLMBackend):
-    """
-    Hugging Face Transformers backend for local inference.
-    
-    Requires transformers library and sufficient GPU memory.
-    """
-    
     def __init__(
         self,
         model_name: str = "meta-llama/Llama-2-7b-chat-hf",
@@ -234,15 +171,6 @@ class TransformersBackend(LLMBackend):
         load_in_8bit: bool = False,
         load_in_4bit: bool = False,
     ):
-        """
-        Initialize Transformers backend.
-        
-        Args:
-            model_name: Hugging Face model identifier
-            device: Device to load model on ('cuda', 'cpu', 'auto')
-            load_in_8bit: Use 8-bit quantization (requires bitsandbytes)
-            load_in_4bit: Use 4-bit quantization (requires bitsandbytes)
-        """
         self.model_name = model_name
         self.device = device
         self.load_in_8bit = load_in_8bit
@@ -253,15 +181,12 @@ class TransformersBackend(LLMBackend):
         self._load_model()
     
     def _load_model(self):
-        """Load model and tokenizer."""
         try:
             from transformers import AutoModelForCausalLM, AutoTokenizer
             import torch
             
-            # Load tokenizer
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
             
-            # Load model with quantization if specified
             kwargs = {"device_map": self.device}
             if self.load_in_8bit:
                 kwargs["load_in_8bit"] = True
@@ -286,21 +211,17 @@ class TransformersBackend(LLMBackend):
         temperature: float = 0.7,
         **kwargs
     ) -> str:
-        """Generate text using Transformers."""
         if self.model is None or self.tokenizer is None:
             raise RuntimeError("Model not loaded")
         
         try:
             import torch
             
-            # Tokenize input
             inputs = self.tokenizer(prompt, return_tensors="pt")
             
-            # Move to device
             if self.device != "cpu":
                 inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
             
-            # Generate
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
@@ -310,10 +231,8 @@ class TransformersBackend(LLMBackend):
                     pad_token_id=self.tokenizer.eos_token_id,
                 )
             
-            # Decode
             generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
             
-            # Remove prompt from output
             if generated_text.startswith(prompt):
                 generated_text = generated_text[len(prompt):].strip()
             
@@ -322,40 +241,23 @@ class TransformersBackend(LLMBackend):
             raise RuntimeError(f"Generation error: {e}")
     
     def is_available(self) -> bool:
-        """Check if model is loaded."""
         return self.model is not None and self.tokenizer is not None
 
 
 class LLMExplainer:
-    """
-    LLM-based pricing explanation generator.
-    
-    Generates human-readable explanations for clothing price predictions
-    based on item attributes, condition, and market context.
-    """
-    
     def __init__(
         self,
         backend: LLMBackend,
         prompt_template: Optional[str] = None,
     ):
-        """
-        Initialize LLM explainer.
-        
-        Args:
-            backend: LLM backend to use
-            prompt_template: Custom prompt template (optional)
-        """
         self.backend = backend
         self.prompt_template = prompt_template or self._default_prompt_template()
         
-        # Check backend availability
         if not self.backend.is_available():
             print("Warning: LLM backend may not be available. Check configuration.")
     
     def _default_prompt_template(self) -> str:
-        """Default prompt template for pricing explanations."""
-        return """You are an expert in second-hand clothing pricing. Given the following information about a clothing item, provide a concise explanation (3-5 sentences) for why the predicted price range is appropriate.
+       return """You are an expert in second-hand clothing pricing. Given the following information about a clothing item, provide a concise explanation (3-5 sentences) for why the predicted price range is appropriate.
 
 Item Information:
 - Clothing Type: {clothing_type}
@@ -387,21 +289,6 @@ Explanation:"""
         max_tokens: int = 500,
         temperature: float = 0.7,
     ) -> Dict[str, Union[str, float]]:
-        """
-        Generate pricing explanation.
-        
-        Args:
-            clothing_type: Type of clothing (e.g., 'dress', 't-shirt')
-            condition_score: Condition score (1-10)
-            predicted_price_range: Tuple of (min_price, max_price)
-            pricing_context: Dictionary with pricing context from similar items
-            max_tokens: Maximum tokens to generate
-            temperature: Sampling temperature (0.0-1.0)
-        
-        Returns:
-            Dictionary with explanation text and metadata
-        """
-        # Prepare condition label
         condition_labels = {
             (1, 3): "Poor - Significant wear",
             (3, 5): "Fair - Moderate wear",
@@ -415,7 +302,6 @@ Explanation:"""
                 condition_label = label
                 break
         
-        # Format similar items
         similar_items_text = ""
         if "similar_items" in pricing_context:
             for i, item in enumerate(pricing_context["similar_items"][:3], 1):
@@ -423,7 +309,6 @@ Explanation:"""
         else:
             similar_items_text = "  (No similar items available)\n"
         
-        # Fill prompt template
         prompt = self.prompt_template.format(
             clothing_type=clothing_type,
             condition_score=condition_score,
@@ -438,7 +323,6 @@ Explanation:"""
             similar_items=similar_items_text.strip(),
         )
         
-        # Generate explanation
         start_time = time.time()
         try:
             explanation = self.backend.generate(
@@ -466,15 +350,12 @@ Explanation:"""
             }
     
     def set_prompt_template(self, template: str):
-        """Update prompt template."""
         self.prompt_template = template
     
     def save_prompt_template(self, path: str):
-        """Save prompt template to file."""
         Path(path).write_text(self.prompt_template)
         print(f"Prompt template saved to {path}")
     
     def load_prompt_template(self, path: str):
-        """Load prompt template from file."""
         self.prompt_template = Path(path).read_text()
         print(f"Prompt template loaded from {path}")

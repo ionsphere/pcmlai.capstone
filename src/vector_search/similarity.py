@@ -1,9 +1,3 @@
-"""
-Similarity Search Module
-
-Provides high-level similarity search functionality with filtering and pricing context.
-"""
-
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Union, Callable
 from pathlib import Path
@@ -14,29 +8,12 @@ from .indexing import VectorIndex, FAISSIndex
 
 
 class SimilaritySearch:
-    """
-    High-level similarity search for clothing items.
-    
-    Features:
-    - k-NN search with filtering
-    - Category-based filtering
-    - Price range filtering
-    - Pricing context generation from similar items
-    - Confidence scoring
-    """
     
     def __init__(
         self,
         index: VectorIndex,
         items_data: Optional[pd.DataFrame] = None,
     ):
-        """
-        Initialize similarity search.
-        
-        Args:
-            index: Vector index (FAISS, Annoy, etc.)
-            items_data: DataFrame with item metadata (id, category, price, etc.)
-        """
         self.index = index
         self.items_data = items_data
         
@@ -45,7 +22,6 @@ class SimilaritySearch:
             self._build_lookup_tables()
     
     def _build_lookup_tables(self):
-        """Build lookup tables for efficient filtering."""
         # Index by item ID
         if 'item_id' in self.items_data.columns:
             self.id_to_idx = {
@@ -74,21 +50,6 @@ class SimilaritySearch:
         condition_range: Optional[Tuple[float, float]] = None,
         filters: Optional[Dict] = None,
     ) -> List[Dict]:
-        """
-        Search for similar items with filtering.
-        
-        Args:
-            query_embedding: Query embedding vector
-            k: Number of results to return
-            category: Filter by clothing category (optional)
-            price_range: Filter by price range (min, max) (optional)
-            condition_range: Filter by condition score (min, max) (optional)
-            filters: Additional custom filters (optional)
-        
-        Returns:
-            List of result dictionaries with metadata and scores
-        """
-        # Search in index (fetch more than k to allow for filtering)
         search_k = min(k * 5, self.index.n_items)
         distances, indices, metadata = self.index.search(
             query_embedding,
@@ -140,8 +101,6 @@ class SimilaritySearch:
         condition_range: Optional[Tuple[float, float]],
         filters: Optional[Dict],
     ) -> bool:
-        """Check if item passes all filters."""
-        # Category filter
         if category is not None:
             if item.get('category') != category:
                 return False
@@ -185,19 +144,6 @@ class SimilaritySearch:
         category: Optional[str] = None,
         condition_range: Optional[Tuple[float, float]] = None,
     ) -> Dict:
-        """
-        Get pricing context from similar items.
-        
-        Args:
-            query_embedding: Query embedding vector
-            k: Number of similar items to analyze
-            category: Filter by category (optional)
-            condition_range: Filter by condition (optional)
-        
-        Returns:
-            Dictionary with pricing statistics and context
-        """
-        # Search for similar items
         results = self.search(
             query_embedding=query_embedding,
             k=k,
@@ -280,23 +226,11 @@ class SimilaritySearch:
         mean: float,
         outlier_ratio: float,
     ) -> float:
-        """
-        Calculate confidence score for pricing context.
-        
-        Score from 0 to 1, where:
-        - 1.0 = high confidence (many similar items, low variance, no outliers)
-        - 0.0 = low confidence (few items, high variance, many outliers)
-        """
-        # Component 1: Number of similar items (more is better)
-        # Scale: 5 items = 0.5, 10+ items = 1.0
         n_score = min(n_similar / 10.0, 1.0)
         
-        # Component 2: Coefficient of variation (lower is better)
-        # CV = std / mean. Lower CV means more consistent prices
         cv = std / mean if mean > 0 else 1.0
         cv_score = 1.0 / (1.0 + cv)  # Convert to 0-1 range (higher is better)
         
-        # Component 3: Outlier ratio (fewer is better)
         outlier_score = 1.0 - outlier_ratio
         
         # Weighted average
@@ -314,18 +248,6 @@ class SimilaritySearch:
         k: int = 50,
         category: Optional[str] = None,
     ) -> Dict:
-        """
-        Get price distribution from similar items for visualization.
-        
-        Args:
-            query_embedding: Query embedding vector
-            k: Number of similar items to analyze
-            category: Filter by category (optional)
-        
-        Returns:
-            Dictionary with distribution data
-        """
-        # Get similar items
         results = self.search(
             query_embedding=query_embedding,
             k=k,
@@ -369,17 +291,6 @@ class SimilaritySearch:
         k: int = 10,
         **kwargs
     ) -> List[List[Dict]]:
-        """
-        Perform batch similarity search.
-        
-        Args:
-            query_embeddings: Batch of query embeddings (n_queries, dimension)
-            k: Number of results per query
-            **kwargs: Additional search parameters
-        
-        Returns:
-            List of result lists (one per query)
-        """
         results = []
         for query in query_embeddings:
             query_results = self.search(query, k=k, **kwargs)
@@ -388,7 +299,6 @@ class SimilaritySearch:
         return results
     
     def save_config(self, path: str):
-        """Save similarity search configuration."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         

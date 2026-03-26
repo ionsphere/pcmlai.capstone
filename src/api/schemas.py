@@ -1,16 +1,9 @@
-"""
-API Schemas Module
-
-Pydantic models for request/response validation.
-"""
-
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing import Optional, List, Dict, Any
 from enum import Enum
 
 
 class ClothingCategory(str, Enum):
-    """Supported clothing categories."""
     TSHIRT = "t-shirt"
     SHIRT = "shirt"
     SWEATER = "sweater"
@@ -34,7 +27,6 @@ class ClothingCategory(str, Enum):
 
 
 class PriceRange(str, Enum):
-    """Price range categories."""
     BUDGET = "budget"  # <$20
     LOW = "low"  # $20-$50
     MEDIUM = "medium"  # $50-$100
@@ -43,7 +35,6 @@ class PriceRange(str, Enum):
 
 
 class ConditionLabel(str, Enum):
-    """Condition quality labels."""
     POOR = "poor"  # 1-3
     FAIR = "fair"  # 4-5
     GOOD = "good"  # 6-7
@@ -54,7 +45,6 @@ class ConditionLabel(str, Enum):
 # ==================== Request Models ====================
 
 class PredictRequest(BaseModel):
-    """Full prediction pipeline request."""
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
