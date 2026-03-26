@@ -135,10 +135,16 @@ Running all three revealed XGBoost achieving the best results
 The resulting feature importance:
 ![Feature importance](images/feature_importance.png)
 
+Notice how presense of the word Agolde (expensive brand) had the most influence on price decision. And in general descriptions matter: skinny, denim, dress, leather, sophisticated, etc - they all provided enough varience in the dataset for model training.
+
 And confusion matrix:
 ![Confusion matrix](images/confusion_matrix.png)
 
+We can see that the model has indeed sufficient quality: all the buckets are identified and items are correctly being distributed.
+In current state the model can already solve the task of assigning the customer input data (photo and description) to the appropriate price bucket and thus apply similarity just based on that assignment.
 
 ## Embedding for KNN and LLM Responses
+
+For better similarity search, this project attempted to add full Vector search with embedding training. Unfortunately, the amount of setup (and extra curriculum knowledge) didn't let me build it in time.
 
 To launch the API run start_api.ps1. Sadly, LLM and Vector integration requires a lot of manual setup and is not available as the end solution of this project.
