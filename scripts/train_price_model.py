@@ -24,6 +24,10 @@ sys.path.insert(0, str(project_root))
 from src.models.price import PriceClassifier
 
 
+DEMO_N_ESTIMATORS = 25
+DEMO_MAX_DEPTH = 4
+
+
 def load_prepared_data(features_dir: Path) -> Dict[str, Any]:
     print(f"Loading data from {features_dir}...")
     
@@ -352,6 +356,8 @@ def main(argv: Optional[Sequence[str]] = None):
                         help='Directory with prepared features')
     parser.add_argument('--quick-test', action='store_true',
                         help='Quick test with mock data')
+    parser.add_argument('--demo', action='store_true',
+                        help='Demo run with fewer trees for faster training')
     parser.add_argument('--mock-samples', type=int, default=1000,
                         help='Number of mock samples for quick test')
     parser.add_argument('--model', type=str, default='xgboost',
@@ -376,6 +382,13 @@ def main(argv: Optional[Sequence[str]] = None):
     
     print("PRICE CLASSIFICATION MODEL TRAINING")
     print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    if args.demo:
+        print(
+            f"Demo Mode: reducing tree count to {DEMO_N_ESTIMATORS} "
+            f"and max depth to {DEMO_MAX_DEPTH}"
+        )
+        args.n_estimators = min(args.n_estimators, DEMO_N_ESTIMATORS)
+        args.max_depth = min(args.max_depth, DEMO_MAX_DEPTH)
     
     if args.quick_test:
         print("Quick Test Mode")

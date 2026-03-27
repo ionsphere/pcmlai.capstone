@@ -26,6 +26,7 @@ from src.models.vision import MultiTaskClothingModel, MultiTaskLoss, count_param
 
 
 DEFAULT_IMAGE_SIZE = 380
+DEMO_EPOCHS = 2
 DEFAULT_CONFIG = {
     "model": {
         "backbone": "efficientnet_b4",
@@ -48,10 +49,12 @@ DEFAULT_CONFIG = {
 }
 
 
-def build_config(quick_test: bool = False) -> Dict:
+def build_config(quick_test: bool = False, demo: bool = False) -> Dict:
     config = copy.deepcopy(DEFAULT_CONFIG)
+    if demo:
+        config["training"]["epochs"] = DEMO_EPOCHS
     if quick_test:
-        config["training"]["epochs"] = 2
+        config["training"]["epochs"] = DEMO_EPOCHS
         config["training"]["batch_size"] = 8
     return config
 
@@ -440,13 +443,17 @@ def main(argv: Optional[Sequence[str]] = None):
                         help='Output directory for model and logs')
     parser.add_argument('--quick-test', action='store_true',
                         help='Quick test mode (2 epochs, small batch)')
+    parser.add_argument('--demo', action='store_true',
+                        help='Demo mode (2 epochs on the real dataset)')
     
     args = parser.parse_args(argv)
     
     print("CONDITION ASSESSMENT TRAINING")
-    config = build_config(quick_test=args.quick_test)
+    config = build_config(quick_test=args.quick_test, demo=args.demo)
     if args.quick_test:
         print("Quick test mode enabled")
+    if args.demo:
+        print(f"Demo mode enabled ({DEMO_EPOCHS} epochs on the real dataset)")
     
     model, history = train_model(config, args)
     

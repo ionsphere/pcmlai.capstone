@@ -32,6 +32,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 DEFAULT_IMAGE_SIZE = 380
+DEMO_EPOCHS = 2
 DEFAULT_CONFIG = {
     'train_csv': None,
     'val_csv': None,
@@ -68,13 +69,17 @@ def build_training_config(
     train_csv: Optional[str] = None,
     val_csv: Optional[str] = None,
     quick_test: bool = False,
+    demo: bool = False,
 ) -> dict:
     config = copy.deepcopy(DEFAULT_CONFIG)
     config['train_csv'] = train_csv
     config['val_csv'] = val_csv
+    if demo:
+        config['epochs'] = DEMO_EPOCHS
+        config['save_every'] = 1
     if quick_test:
         config['batch_size'] = 8
-        config['epochs'] = 2
+        config['epochs'] = DEMO_EPOCHS
         config['save_every'] = 1
     return config
 
@@ -646,6 +651,11 @@ def main(argv: Optional[Sequence[str]] = None):
         help='Run quick test with mock data (2 epochs)'
     )
     parser.add_argument(
+        '--demo',
+        action='store_true',
+        help='Run demo mode on the real dataset (2 epochs)'
+    )
+    parser.add_argument(
         '--mock',
         action='store_true',
         help='Create mock dataset for testing'
@@ -682,7 +692,10 @@ def main(argv: Optional[Sequence[str]] = None):
     config = build_training_config(
         train_csv=args.train_csv,
         val_csv=args.val_csv,
+        demo=args.demo,
     )
+    if args.demo:
+        logger.info(f"Running demo mode ({DEMO_EPOCHS} epochs on the real dataset)...")
     
     results = train_model(config, Path(args.output_dir))
     

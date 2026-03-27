@@ -25,6 +25,7 @@ from scripts.prepare_clothing_type_dataset import ClothingTypeDataset
 
 
 DEFAULT_IMAGE_SIZE = 380
+DEMO_EPOCHS = 2
 DEFAULT_TRAINING_CONFIG = {
     "model": {
         "backbone": "efficientnet_b4",
@@ -60,17 +61,25 @@ DEFAULT_TRAINING_CONFIG = {
 }
 
 
-def build_config(batch_size: Optional[int] = None, epochs: Optional[int] = None, quick_test: bool = False) -> Dict:
+def build_config(
+    batch_size: Optional[int] = None,
+    epochs: Optional[int] = None,
+    quick_test: bool = False,
+    demo: bool = False,
+) -> Dict:
     config = copy.deepcopy(DEFAULT_TRAINING_CONFIG)
     if batch_size is not None:
         config["training"]["batch_size"] = batch_size
     if epochs is not None:
         config["training"]["num_epochs"] = epochs
         config["training"]["scheduler_params"]["T_max"] = epochs
+    if demo:
+        config["training"]["num_epochs"] = DEMO_EPOCHS
+        config["training"]["scheduler_params"]["T_max"] = DEMO_EPOCHS
     if quick_test:
         config["training"]["batch_size"] = 4
-        config["training"]["num_epochs"] = 2
-        config["training"]["scheduler_params"]["T_max"] = 2
+        config["training"]["num_epochs"] = DEMO_EPOCHS
+        config["training"]["scheduler_params"]["T_max"] = DEMO_EPOCHS
     return config
 
 
@@ -488,6 +497,8 @@ def main(argv: Optional[Sequence[str]] = None):
                        help='Path to checkpoint to resume from')
     parser.add_argument('--quick-test', action='store_true',
                        help='Quick test run with small dataset and few epochs')
+    parser.add_argument('--demo', action='store_true',
+                       help='Demo run on the real dataset for 2 epochs')
     parser.add_argument('--batch-size', type=int, default=None,
                        help='Override batch size')
     parser.add_argument('--epochs', type=int, default=None,
@@ -500,9 +511,12 @@ def main(argv: Optional[Sequence[str]] = None):
         batch_size=args.batch_size,
         epochs=args.epochs,
         quick_test=args.quick_test,
+        demo=args.demo,
     )
     if args.quick_test:
         print("Quick test mode enabled")
+    if args.demo:
+        print(f"Demo mode enabled ({DEMO_EPOCHS} epochs on the real dataset)")
     
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
