@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_BASE_DIR = "data"
 DEFAULT_SUMMARY_REPORT = "data/data_organization_report.json"
 DEFAULT_UNIFIED_FORMAT = "both"
+DEMO_MAX_UNIFIED_ITEMS_PER_PLATFORM = 25
 
 
 class DataOrganizer:
@@ -275,7 +276,7 @@ class DataOrganizer:
             "batch_count": len(batch_files)
         }
         
-    def unify_scraped_data(self, output_format: str = "json"):
+    def unify_scraped_data(self, output_format: str = "json", max_items_per_platform: Optional[int] = None):
         logger.info("Unifying scraped data from all platforms...")
         unified_data = []
         platforms = [
@@ -290,8 +291,11 @@ class DataOrganizer:
                 continue
                 
             logger.info(f"Processing {platform} data...")
+            platform_items = 0
             
             for json_file in directory.glob("*.json"):
+                if max_items_per_platform is not None and platform_items >= max_items_per_platform:
+                    break
                 if json_file.stem.startswith("batch_") or json_file.stem in ["scraping_stats", "data_summary"]:
                     continue
                     
@@ -301,6 +305,7 @@ class DataOrganizer:
                     
                     unified_item = self.standardize_item(item_data, platform)
                     unified_data.append(unified_item)
+                    platform_items += 1
                     
                 except Exception as e:
                     logger.error(f"Error processing {json_file}: {e}")
@@ -308,6 +313,8 @@ class DataOrganizer:
             batch_dir = directory / "batches"
             if batch_dir.exists():
                 for batch_file in batch_dir.glob("batch_*.json"):
+                    if max_items_per_platform is not None and platform_items >= max_items_per_platform:
+                        break
                     try:
                         with open(batch_file, 'r', encoding='utf-8') as f:
                             batch_data = json.load(f)
@@ -320,8 +327,11 @@ class DataOrganizer:
                             continue
                         
                         for item_data in items:
+                            if max_items_per_platform is not None and platform_items >= max_items_per_platform:
+                                break
                             unified_item = self.standardize_item(item_data, platform)
                             unified_data.append(unified_item)
+                            platform_items += 1
                             
                     except Exception as e:
                         logger.error(f"Error processing {batch_file}: {e}")
@@ -544,6 +554,11 @@ def main(argv: Optional[Sequence[str]] = None):
         default=DEFAULT_SUMMARY_REPORT,
         help="Path for the summary report JSON"
     )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Run a reduced demo organization pass"
+    )
     
     args = parser.parse_args(argv)
     
@@ -553,15 +568,23 @@ def main(argv: Optional[Sequence[str]] = None):
         organizer.create_directory_structure()
     
     if args.organize_deepfashion:
+        if args.demo and args.copy:
+            logger.info("Demo mode enabled: using symlinks instead of copying DeepFashion files")
         organizer.organize_deepfashion_data(
-            use_symlinks=not args.copy,
+            use_symlinks=(args.demo or not args.copy),
         )
     
     if args.verify:
         organizer.verify_data_sources()
     
     if args.unify:
-        organizer.unify_scraped_data(output_format=args.format)
+        max_items_per_platform = DEMO_MAX_UNIFIED_ITEMS_PER_PLATFORM if args.demo else None
+        if args.demo:
+            logger.info(f"Demo mode enabled: unifying up to {max_items_per_platform} items per platform")
+        organizer.unify_scraped_data(
+            output_format=args.format,
+            max_items_per_platform=max_items_per_platform,
+        )
     
     if args.summary:
         organizer.generate_summary_report(output_file=args.output)

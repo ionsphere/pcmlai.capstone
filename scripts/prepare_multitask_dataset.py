@@ -14,6 +14,8 @@ DEFAULT_DEEPFASHION2_CSV = 'data/processed/deepfashion2_processed.csv'
 DEFAULT_SYNTHETIC_ROOT = 'data/deepfashion/synthetic_degraded'
 DEFAULT_OUTPUT_DIR = 'data/processed/multitask'
 DEFAULT_RANDOM_SEED = 42
+DEMO_MAX_PRISTINE_ROWS = 300
+DEMO_MAX_SYNTHETIC_ROWS = 300
 DEEPFASHION2_TO_STANDARD = {
     "short sleeve top": "t-shirt",
     "long sleeve top": "shirt",
@@ -54,7 +56,7 @@ def bbox_area(bbox_value: str) -> float:
     return max(x2 - x1, 0.0) * max(y2 - y1, 0.0)
 
 
-def build_pristine_records(deepfashion2_csv: Path) -> pd.DataFrame:
+def build_pristine_records(deepfashion2_csv: Path, demo: bool = False) -> pd.DataFrame:
     df = pd.read_csv(deepfashion2_csv)
     df = df[['path', 'category_name', 'split', 'b_box']].copy()
     df['image_path'] = df['path'].apply(normalize_deepfashion2_path)
@@ -68,10 +70,13 @@ def build_pristine_records(deepfashion2_csv: Path) -> pd.DataFrame:
     )
     df['condition_score'] = 10.0
     df['source'] = 'deepfashion2_pristine'
-    return df[['image_path', 'category', 'condition_score', 'split', 'source']]
+    df = df[['image_path', 'category', 'condition_score', 'split', 'source']]
+    if demo:
+        df = df.head(DEMO_MAX_PRISTINE_ROWS).copy()
+    return df
 
 
-def load_synthetic_metadata(synthetic_root: Path) -> pd.DataFrame:
+def load_synthetic_metadata(synthetic_root: Path, demo: bool = False) -> pd.DataFrame:
     metadata_files = list(synthetic_root.rglob('generation_metadata.json'))
     records = []
     for metadata_file in metadata_files:
@@ -85,14 +90,17 @@ def load_synthetic_metadata(synthetic_root: Path) -> pd.DataFrame:
                 'source': 'synthetic_degraded',
             })
 
-    return pd.DataFrame(records)
+    synthetic_df = pd.DataFrame(records)
+    if demo:
+        synthetic_df = synthetic_df.head(DEMO_MAX_SYNTHETIC_ROWS).copy()
+    return synthetic_df
 
 
-def build_multitask_dataset(deepfashion2_csv: Path, synthetic_root: Path) -> pd.DataFrame:
-    pristine_df = build_pristine_records(deepfashion2_csv)
+def build_multitask_dataset(deepfashion2_csv: Path, synthetic_root: Path, demo: bool = False) -> pd.DataFrame:
+    pristine_df = build_pristine_records(deepfashion2_csv, demo=demo)
     source_lookup = pristine_df[['image_path', 'category', 'split']].copy()
     source_lookup = source_lookup.rename(columns={'image_path': 'source_image'})
-    synthetic_df = load_synthetic_metadata(synthetic_root)
+    synthetic_df = load_synthetic_metadata(synthetic_root, demo=demo)
     if synthetic_df.empty:
         return pristine_df
 
@@ -169,6 +177,11 @@ def main(argv: Optional[Sequence[str]] = None):
         default=DEFAULT_OUTPUT_DIR,
         help='Output directory for multitask CSV splits'
     )
+    parser.add_argument(
+        '--demo',
+        action='store_true',
+        help='Run a reduced demo dataset preparation pass'
+    )
     args = parser.parse_args(argv)
 
     deepfashion2_csv = PROJECT_ROOT / args.deepfashion2_csv
@@ -178,7 +191,13 @@ def main(argv: Optional[Sequence[str]] = None):
     if not deepfashion2_csv.exists():
         raise FileNotFoundError(f"DeepFashion2 processed CSV not found: {deepfashion2_csv}")
 
-    df = build_multitask_dataset(deepfashion2_csv, synthetic_root)
+    if args.demo:
+        print(
+            f"Demo mode enabled: using up to {DEMO_MAX_PRISTINE_ROWS} pristine and "
+            f"{DEMO_MAX_SYNTHETIC_ROWS} synthetic rows"
+        )
+
+    df = build_multitask_dataset(deepfashion2_csv, synthetic_root, demo=args.demo)
     if df.empty:
         raise RuntimeError("Multitask dataset generation produced no rows.")
 

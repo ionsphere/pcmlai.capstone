@@ -1,5 +1,3 @@
-"""FastAPI app."""
-
 import logging
 import os
 import time

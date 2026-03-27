@@ -22,6 +22,8 @@ DEFAULT_OUTPUT_DIR = 'data/processed/condition_assessment'
 DEFAULT_PRISTINE_SCORE = 10.0
 DEFAULT_MOCK_SAMPLES = 100
 DEFAULT_RANDOM_SEED = 42
+DEMO_MAX_ORIGINAL_IMAGES = 200
+DEMO_MAX_SYNTHETIC_IMAGES = 200
 
 
 def save_condition_dataset(df: pd.DataFrame, output_path: Path) -> Dict[str, Path]:
@@ -150,7 +152,8 @@ def prepare_deepfashion_condition_dataset(
     deepfashion_dir: str,
     synthetic_dir: str,
     output_dir: str,
-    pristine_label: float = DEFAULT_PRISTINE_SCORE
+    pristine_label: float = DEFAULT_PRISTINE_SCORE,
+    demo: bool = False,
 ) -> Dict[str, Path]:
     print(f"Preparing DeepFashion condition dataset...")
     print(f"DeepFashion: {deepfashion_dir}")
@@ -166,7 +169,8 @@ def prepare_deepfashion_condition_dataset(
     if df_dir.exists():
         print(f"Processing original images (condition {pristine_label})...")
         image_files = list(df_dir.glob("**/*.jpg")) + list(df_dir.glob("**/*.png"))
-        for img_path in tqdm(image_files[:10000], desc="Original"):
+        original_limit = DEMO_MAX_ORIGINAL_IMAGES if demo else 10000
+        for img_path in tqdm(image_files[:original_limit], desc="Original"):
             data_records.append({
                 'image_path': str(img_path),
                 'condition_score': pristine_label,
@@ -182,6 +186,9 @@ def prepare_deepfashion_condition_dataset(
         if metadata_path.exists():
             with open(metadata_path, 'r') as f:
                 metadata = json.load(f)
+
+            if demo:
+                metadata = metadata[:DEMO_MAX_SYNTHETIC_IMAGES]
             
             for item in tqdm(metadata, desc="Synthetic"):
                 data_records.append({
@@ -228,16 +235,27 @@ def main(argv: Optional[Sequence[str]] = None):
         action='store_true',
         help='Create mock dataset for testing'
     )
+    parser.add_argument(
+        '--demo',
+        action='store_true',
+        help='Run a reduced demo dataset preparation pass'
+    )
     
     args = parser.parse_args(argv)
     print("CONDITION ASSESSMENT DATASET PREPARATION")
     if args.mock:
         splits = create_mock_condition_dataset(args.output_dir)
     else:
+        if args.demo:
+            print(
+                f"Demo mode enabled: using up to {DEMO_MAX_ORIGINAL_IMAGES} pristine and "
+                f"{DEMO_MAX_SYNTHETIC_IMAGES} synthetic samples"
+            )
         splits = prepare_deepfashion_condition_dataset(
             args.deepfashion_dir,
             args.synthetic_dir,
             args.output_dir,
+            demo=args.demo,
         )
     
     if splits:

@@ -180,7 +180,13 @@ Examples:
     parser.add_argument("--extract", action="store_true")
     parser.add_argument("--splits", action="store_true")
     parser.add_argument("--stats", action="store_true")
+    parser.add_argument("--demo", action="store_true", help="Skip the full DeepFashion download in demo mode")
     args = parser.parse_args(argv)
+
+    if args.demo and args.download:
+        print("Demo mode enabled: skipping the main DeepFashion download.")
+        print("Use Kaggle demo download to fetch only the smaller Vishal dataset.")
+        args.download = False
 
     downloader = DeepFashionDownloader(output_dir=args.output)
     if not any([args.instructions, args.download, args.verify, args.extract, args.splits, args.stats]):

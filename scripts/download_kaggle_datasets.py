@@ -15,6 +15,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+DEMO_ALLOWED_DATASET = "vishalbsadanand/deepfashion-1"
+
+
 def check_kaggle_credentials() -> bool:
     username = os.getenv("KAGGLE_USERNAME")
     key = os.getenv("KAGGLE_KEY")
@@ -134,9 +137,23 @@ Examples:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Set logging level",
     )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help=f"Only download the demo-sized dataset ({DEMO_ALLOWED_DATASET})",
+    )
     
     args = parser.parse_args(argv)
     logging.getLogger().setLevel(getattr(logging, args.log_level))
+
+    if args.demo and args.dataset != DEMO_ALLOWED_DATASET:
+        logger.info(
+            "Demo mode enabled: skipping %s and keeping only %s",
+            args.dataset,
+            DEMO_ALLOWED_DATASET,
+        )
+        sys.exit(0)
+
     if not check_kaggle_credentials():
         sys.exit(1)
     

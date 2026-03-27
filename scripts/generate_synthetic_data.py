@@ -15,6 +15,12 @@ sys.path.insert(0, str(project_root))
 from src.data.synthetic import batch_generate_synthetic_data
 
 
+DEMO_NUM_VARIATIONS = 1
+DEMO_MAX_IMAGES = 25
+DEMO_CONDITION_MIN = 6
+DEMO_CONDITION_MAX = 9
+
+
 def validate_args(args):
     errors = []
     input_path = Path(args.input_dir)
@@ -124,8 +130,23 @@ Example:
         action='store_true',
         help='Show what would be generated without actually processing'
     )
+    parser.add_argument(
+        '--demo',
+        action='store_true',
+        help='Run a reduced demo generation pass'
+    )
     
     args = parser.parse_args(argv)
+    if args.demo:
+        args.num_variations = min(args.num_variations, DEMO_NUM_VARIATIONS)
+        args.max_images = DEMO_MAX_IMAGES if args.max_images is None else min(args.max_images, DEMO_MAX_IMAGES)
+        args.condition_min = max(args.condition_min, DEMO_CONDITION_MIN)
+        args.condition_max = min(args.condition_max, DEMO_CONDITION_MAX)
+        print(
+            f"Demo mode enabled: num_variations={args.num_variations}, "
+            f"max_images={args.max_images}, condition_range=({args.condition_min}, {args.condition_max})"
+        )
+
     errors = validate_args(args)
     if errors:
         print("Validation Errors:")
@@ -151,12 +172,13 @@ Example:
         print(f"Run without --dry-run to generate {estimates['total_generated']:,} images.")
         sys.exit(0)
     
-    print("This will generate a large number of files.")
-    response = input("   Continue? (y/N): ").strip().lower()
-    
-    if response != 'y':
-        print("Generation cancelled by user.")
-        sys.exit(0)
+    if not args.demo:
+        print("This will generate a large number of files.")
+        response = input("   Continue? (y/N): ").strip().lower()
+        
+        if response != 'y':
+            print("Generation cancelled by user.")
+            sys.exit(0)
     
     print()
     print("Starting generation...")

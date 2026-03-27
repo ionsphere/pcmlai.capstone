@@ -26,6 +26,7 @@ scrapy>=2.9.0
 selenium>=4.10.0
 playwright>=1.40.0
 lxml>=4.9.0
+kaggle
 
 # Vector Search and Embeddings
 faiss-cpu>=1.7.4
@@ -38,6 +39,7 @@ xgboost>=1.7.0
 lightgbm>=4.0.0
 optuna>=3.3.0
 mlflow>=2.5.0
+sentence_transformers
 
 # API and Web Framework
 fastapi>=0.100.0

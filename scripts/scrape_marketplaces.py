@@ -16,6 +16,10 @@ from src.data.scrapers import (
 )
 
 
+DEMO_MAX_ITEMS = 10
+DEMO_RATE_LIMIT = 0.5
+
+
 def scrape_marketplace(
     platform: str,
     query: str,
@@ -162,6 +166,11 @@ Examples:
         type=str,
         help='Condition filter (e.g., "new", "like_new", "good")'
     )
+    parser.add_argument(
+        '--demo',
+        action='store_true',
+        help='Run a reduced demo scrape'
+    )
     
     args = parser.parse_args(argv)
     
@@ -177,6 +186,11 @@ Examples:
         filters['category'] = args.category
     if args.condition:
         filters['condition'] = args.condition
+
+    if args.demo:
+        args.max_items = min(args.max_items, DEMO_MAX_ITEMS)
+        args.rate_limit = min(args.rate_limit, DEMO_RATE_LIMIT)
+        print(f"Demo mode enabled: max_items={args.max_items}, rate_limit={args.rate_limit}")
     
     if args.all_platforms:
         scrape_all_platforms(

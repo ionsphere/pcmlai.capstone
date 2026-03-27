@@ -210,7 +210,7 @@ class SyntheticDegradationPipeline:
                 base_color = img_array[y, x].astype(np.int16)
                 pill_color = np.clip(base_color + color_offset, 0, 255).astype(np.uint8)
                 
-               cv2.circle(img_array, (x, y), pill_size, pill_color.tolist(), -1)
+                cv2.circle(img_array, (x, y), pill_size, pill_color.tolist(), -1)
         
         return Image.fromarray(img_array)
     

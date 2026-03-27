@@ -8,7 +8,10 @@ import pandas as pd
 from tqdm import tqdm
 
 
-def load_scraped_data(data_dir: Path) -> pd.DataFrame:
+DEMO_MAX_ITEMS_PER_PLATFORM = 25
+
+
+def load_scraped_data(data_dir: Path, max_items_per_platform: Optional[int] = None) -> pd.DataFrame:
     print(f"Loading data from: {data_dir}")
     items = []
     platforms = [p for p in data_dir.iterdir() if p.is_dir() and p.name in ['poshmark', 'depop', 'thredup']]
@@ -16,12 +19,16 @@ def load_scraped_data(data_dir: Path) -> pd.DataFrame:
         for platform_dir in platforms:
             platform = platform_dir.name
             print(f"Loading {platform}...")
+            platform_items = 0
             json_files = list(platform_dir.glob('*.json'))
             for json_file in tqdm(json_files, desc=f"  {platform} items"):
+                if max_items_per_platform is not None and platform_items >= max_items_per_platform:
+                    break
                 try:
                     with open(json_file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
                         items.append(data)
+                        platform_items += 1
                 except Exception as e:
                     print(f"Failed to load {json_file}: {e}")
             
@@ -29,17 +36,26 @@ def load_scraped_data(data_dir: Path) -> pd.DataFrame:
             if batch_dir.exists():
                 batch_files = list(batch_dir.glob('*.json'))
                 for batch_file in tqdm(batch_files, desc=f"  {platform} batches"):
+                    if max_items_per_platform is not None and platform_items >= max_items_per_platform:
+                        break
                     try:
                         with open(batch_file, 'r', encoding='utf-8') as f:
                             data = json.load(f)
                             if 'items' in data:
-                                items.extend(data['items'])
+                                remaining = None
+                                if max_items_per_platform is not None:
+                                    remaining = max_items_per_platform - platform_items
+                                batch_items = data['items'][:remaining] if remaining is not None else data['items']
+                                items.extend(batch_items)
+                                platform_items += len(batch_items)
                     except Exception as e:
                         print(f"Failed to load {batch_file}: {e}")
     else:
         print("Loading from flat directory...")
         json_files = list(data_dir.glob('*.json'))
         for json_file in tqdm(json_files, desc="  Loading items"):
+            if max_items_per_platform is not None and len(items) >= max_items_per_platform:
+                break
             try:
                 with open(json_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
@@ -487,6 +503,11 @@ def main(argv: Optional[Sequence[str]] = None):
         action='store_true',
         help='Remove items without valid image URLs'
     )
+    parser.add_argument(
+        '--demo',
+        action='store_true',
+        help='Run a reduced demo cleaning pass'
+    )
     
     args = parser.parse_args(argv)
     
@@ -498,7 +519,11 @@ def main(argv: Optional[Sequence[str]] = None):
         return
     
     print("Marketplace Data Cleaning & Normalization")
-    df = load_scraped_data(input_dir)
+    max_items_per_platform = DEMO_MAX_ITEMS_PER_PLATFORM if args.demo else None
+    if args.demo:
+        print(f"Demo mode enabled: loading up to {max_items_per_platform} items per platform")
+
+    df = load_scraped_data(input_dir, max_items_per_platform=max_items_per_platform)
     if df.empty:
         print("No data to clean!")
         return
