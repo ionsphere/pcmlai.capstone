@@ -53,7 +53,7 @@ class VisionEmbeddingExtractor:
     def _load_model(self, model_path: str) -> nn.Module:
         from .vision import MultiTaskClothingModel
         
-        checkpoint = torch.load(model_path, map_location=self.device)
+        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
         
         if 'config' in checkpoint:
             config = checkpoint['config']
