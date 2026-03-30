@@ -45,6 +45,7 @@ class FAISSIndex(VectorIndex):
         self.nprobe = nprobe
         self.hnsw_m = hnsw_m
         self.use_gpu = use_gpu
+        self.gpu_index_active = False
         
         self.index = None
         self.metadata = None
@@ -83,9 +84,11 @@ class FAISSIndex(VectorIndex):
             try:
                 res = faiss.StandardGpuResources()
                 self.index = faiss.index_cpu_to_gpu(res, 0, self.index)
+                self.gpu_index_active = True
             except Exception as e:
                 print(f"Warning: Could not move index to GPU: {e}")
                 print("Falling back to CPU indexing")
+                self.gpu_index_active = False
         
         # Add embeddings to index
         self.index.add(embeddings.astype(np.float32))
@@ -226,10 +229,16 @@ class FAISSIndex(VectorIndex):
         # Save FAISS index
         index_path = str(path.with_suffix('.index'))
         
-        # Move to CPU before saving if on GPU
-        if self.use_gpu:
-            cpu_index = faiss.index_gpu_to_cpu(self.index)
-            faiss.write_index(cpu_index, index_path)
+        # Move to CPU before saving only if the active index is actually on GPU.
+        if self.gpu_index_active:
+            if hasattr(faiss, 'index_gpu_to_cpu'):
+                cpu_index = faiss.index_gpu_to_cpu(self.index)
+                faiss.write_index(cpu_index, index_path)
+            else:
+                raise RuntimeError(
+                    "This FAISS build does not expose GPU save helpers. "
+                    "Rebuild or load the index on CPU before saving."
+                )
         else:
             faiss.write_index(self.index, index_path)
         
@@ -247,6 +256,8 @@ class FAISSIndex(VectorIndex):
             'nprobe': self.nprobe,
             'hnsw_m': self.hnsw_m,
             'n_items': self.n_items,
+            'use_gpu': self.use_gpu,
+            'gpu_index_active': self.gpu_index_active,
         }
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=2)
@@ -268,6 +279,7 @@ class FAISSIndex(VectorIndex):
         self.nprobe = config.get('nprobe', 10)
         self.hnsw_m = config.get('hnsw_m', 32)
         self.n_items = config['n_items']
+        self.gpu_index_active = False
         
         # Load FAISS index
         index_path = str(path.with_suffix('.index'))
@@ -282,8 +294,10 @@ class FAISSIndex(VectorIndex):
             try:
                 res = faiss.StandardGpuResources()
                 self.index = faiss.index_cpu_to_gpu(res, 0, self.index)
+                self.gpu_index_active = True
             except Exception as e:
                 print(f"Warning: Could not move index to GPU: {e}")
+                self.gpu_index_active = False
         
         # Load metadata
         metadata_path = str(path.with_suffix('.metadata'))

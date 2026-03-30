@@ -13,5 +13,5 @@ try {
 }
 
 python scripts\start_api.py --host 0.0.0.0 --port 8000 --reload --log-level info
-Write-Header "Done!"
+Write-Host "Done!"
 Read-Host "Press Enter to exit"

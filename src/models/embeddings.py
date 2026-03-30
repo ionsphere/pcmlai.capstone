@@ -153,10 +153,22 @@ class TextEmbeddingExtractor:
         self,
         model_name: str = 'all-MiniLM-L6-v2',
         device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
+        local_files_only: bool = True,
     ):
         self.model_name = model_name
         self.device = device
-        self.model = SentenceTransformer(model_name, device=device)
+        self.local_files_only = local_files_only
+        try:
+            self.model = SentenceTransformer(
+                model_name,
+                device=device,
+                local_files_only=local_files_only,
+            )
+        except Exception as exc:
+            mode = "local-only" if local_files_only else "online"
+            raise RuntimeError(
+                f"Failed to load text embedding model '{model_name}' in {mode} mode."
+            ) from exc
         self.embedding_dim = self.model.get_sentence_embedding_dimension()
     
     def extract(
@@ -297,6 +309,7 @@ class EmbeddingPipeline:
         self,
         vision_model_path: Optional[str] = None,
         text_model_name: str = 'all-MiniLM-L6-v2',
+        text_local_files_only: bool = True,
         fusion_method: str = 'concat',
         reduce_dim: bool = False,
         reduction_method: str = 'pca',
@@ -314,7 +327,8 @@ class EmbeddingPipeline:
         if text_model_name:
             self.text_extractor = TextEmbeddingExtractor(
                 model_name=text_model_name,
-                device=device
+                device=device,
+                local_files_only=text_local_files_only,
             )
         self.multi_modal = MultiModalEmbedding(
             vision_extractor=self.vision_extractor,
